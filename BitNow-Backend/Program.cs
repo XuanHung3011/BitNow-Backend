@@ -4,6 +4,10 @@ using BitNow_Backend.BLL.Services;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
+using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.BLL.Services;
+using BitNow_Backend.DAL.IRepositories;
+using BitNow_Backend.DAL.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -15,6 +19,8 @@ builder.Services.AddDbContext<BidNowDbContext>(options =>
 // BLL: Register services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailVerificationRepository, EmailVerificationRepository>();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -42,10 +48,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
-// Use CORS
+// Use CORS early to handle preflight before any redirects
 app.UseCors("AllowAll");
+
+// Avoid redirecting preflight requests in development (causes CORS failure)
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 

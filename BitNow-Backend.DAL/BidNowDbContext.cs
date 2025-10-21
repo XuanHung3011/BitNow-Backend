@@ -27,6 +27,7 @@ public partial class BidNowDbContext : DbContext
     public virtual DbSet<User> Users { get; set; }
     public virtual DbSet<UserRole> UserRoles { get; set; }
     public virtual DbSet<Watchlist> Watchlists { get; set; }
+    public virtual DbSet<EmailVerification> EmailVerifications { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -254,6 +255,19 @@ public partial class BidNowDbContext : DbContext
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.HasOne(d => d.Auction).WithMany(p => p.Watchlists).HasForeignKey(d => d.AuctionId).HasConstraintName("FK__Watchlist__aucti__6754599E");
             entity.HasOne(d => d.User).WithMany(p => p.Watchlists).HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Watchlist__user___66603565");
+        });
+
+        modelBuilder.Entity<EmailVerification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Email).HasMaxLength(255);
+            entity.Property(e => e.Token).HasMaxLength(255);
+            entity.Property(e => e.IsUsed).HasDefaultValue(false);
+            entity.Property(e => e.ExpiresAt);
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);
