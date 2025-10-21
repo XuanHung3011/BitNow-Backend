@@ -9,3 +9,4 @@ public interface IAuthService
     Task<bool> VerifyEmailAsync(string token);
     Task<string> GenerateAndStoreVerificationAsync(int userId, string email);
 }
+

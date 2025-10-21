@@ -47,3 +47,4 @@ namespace BitNow_Backend.DAL.Migrations
         }
     }
 }
+
