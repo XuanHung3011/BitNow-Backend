@@ -1,0 +1,90 @@
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.history/
+.fleet/
+
+# ---- Visual Studio / .NET ----
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+logs/
+TestResults/
+*.VisualState.xml
+*.pidb
+*.svclog
+*.scc
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuspec
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Publish outputs
+*.Publish.xml
+publish/
+**/wwwroot/**/lib/
+
+# Rider / ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Azure / IIS
+*.azurePubxml
+*.pubxml.user
+**/Properties/ServiceDependencies/**
+**/Properties/ServiceDependencies/**/*.xml
+_references.cache
+AppPackages/
+BundleArtifacts/
+Generated Files/
+
+# Coverage
+coverage/
+*.opencover.xml
+*.coverage
+*.coveragexml
+
+# EF / Tooling caches
+Migrations/**/obj/
+**/*.Cache
+.ionide/
+
+# Static web assets (generated)
+**/obj/**/staticwebassets/**
+**/bin/**/staticwebassets/**
+
+# Local secrets / env
+secrets.json
+appsettings.*.local.json
+appsettings.Local.json
+.env
+.env.*
+
+# Cursor / Agent tooling
+.cursor/
+
+
