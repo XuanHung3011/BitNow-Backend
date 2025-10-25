@@ -47,12 +47,18 @@ public class AuthController : ControllerBase
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
             var user = await _authService.LoginAsync(dto.Email, dto.Password);
-            if (user == null) return Unauthorized(new { message = "Invalid credentials" });
             return Ok(user);
         }
         catch (InvalidOperationException ex)
         {
-            return Forbid(ex.Message);
+            if (ex.Message == "User not found")
+                return NotFound("Tài khoản chưa được đăng ký");
+            else if (ex.Message == "Invalid password")
+                return Unauthorized("Mật khẩu không đúng");
+            else if (ex.Message == "Email not verified")
+                return Forbid("Email chưa được xác minh");
+            else
+                return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
@@ -85,6 +91,10 @@ public class AuthController : ControllerBase
         try
         {
             var token = await _authService.GenerateAndStoreVerificationAsync(dto.UserId, dto.Email);
+            
+            // Send email with the new token
+            await _authService.SendVerificationEmailAsync(dto.Email, dto.UserId, token);
+            
             return Ok(new { token });
         }
         catch (Exception ex)
@@ -93,6 +103,7 @@ public class AuthController : ControllerBase
             return StatusCode(500, "Internal server error");
         }
     }
+
 }
 
 

@@ -9,11 +9,13 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly IEmailVerificationRepository _verificationRepository;
+    private readonly IEmailService _emailService;
 
-    public AuthService(IUserRepository userRepository, IEmailVerificationRepository verificationRepository)
+    public AuthService(IUserRepository userRepository, IEmailVerificationRepository verificationRepository, IEmailService emailService)
     {
         _userRepository = userRepository;
         _verificationRepository = verificationRepository;
+        _emailService = emailService;
     }
 
     public async Task<UserResponseDto> RegisterAsync(UserCreateDto dto)
@@ -41,7 +43,19 @@ public class AuthService : IAuthService
 
         user = await _userRepository.AddAsync(user);
 
-        await GenerateAndStoreVerificationAsync(user.Id, user.Email);
+        // Generate verification token and send email
+        var token = await GenerateAndStoreVerificationAsync(user.Id, user.Email);
+        
+        try
+        {
+            await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, token);
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail registration
+            // User can still verify manually via resend endpoint
+            Console.WriteLine($"Failed to send verification email: {ex.Message}");
+        }
 
         return Map(user);
     }
@@ -49,9 +63,9 @@ public class AuthService : IAuthService
     public async Task<UserResponseDto?> LoginAsync(string email, string password)
     {
         var user = await _userRepository.GetByEmailAsync(email);
-        if (user == null) return null;
+        if (user == null) throw new InvalidOperationException("User not found");
 
-        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) return null;
+        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) throw new InvalidOperationException("Invalid password");
 
         if (user.IsActive != true) throw new InvalidOperationException("Email not verified");
 
@@ -92,6 +106,15 @@ public class AuthService : IAuthService
 
         await _verificationRepository.AddAsync(verification);
         return token;
+    }
+
+    public async Task SendVerificationEmailAsync(string email, int userId, string token)
+    {
+        // Get user info for email
+        var user = await _userRepository.GetByIdAsync(userId);
+        var userName = user?.FullName ?? "User";
+        
+        await _emailService.SendVerificationEmailAsync(email, userName, token);
     }
 
     private static UserResponseDto Map(User user)

@@ -4,10 +4,6 @@ using BitNow_Backend.BLL.Services;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
-using BitNow_Backend.BLL.IServices;
-using BitNow_Backend.BLL.Services;
-using BitNow_Backend.DAL.IRepositories;
-using BitNow_Backend.DAL.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -21,6 +17,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailVerificationRepository, EmailVerificationRepository>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Add services to the container.
 builder.Services.AddControllers();

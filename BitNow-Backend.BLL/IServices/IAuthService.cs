@@ -8,5 +8,6 @@ public interface IAuthService
     Task<UserResponseDto?> LoginAsync(string email, string password);
     Task<bool> VerifyEmailAsync(string token);
     Task<string> GenerateAndStoreVerificationAsync(int userId, string email);
+    Task SendVerificationEmailAsync(string email, int userId, string token);
 }
 
