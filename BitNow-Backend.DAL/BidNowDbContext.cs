@@ -29,7 +29,7 @@ public partial class BidNowDbContext : DbContext
     public virtual DbSet<Watchlist> Watchlists { get; set; }
     public virtual DbSet<EmailVerification> EmailVerifications { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) {  }
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
