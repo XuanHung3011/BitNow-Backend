@@ -23,6 +23,23 @@ public class AuthService : IAuthService
         var existing = await _userRepository.GetByEmailAsync(dto.Email);
         if (existing != null)
         {
+            // If user exists but not verified yet, resend verification email and return existing user
+            if (existing.IsActive != true)
+            {
+                var resendToken = await GenerateAndStoreVerificationAsync(existing.Id, existing.Email);
+                try
+                {
+                    await _emailService.SendVerificationEmailAsync(existing.Email, existing.FullName, resendToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to resend verification email: {ex.Message}");
+                }
+
+                return Map(existing);
+            }
+
+            // Active user already exists
             throw new InvalidOperationException("Email already exists");
         }
 
