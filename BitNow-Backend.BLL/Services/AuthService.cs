@@ -60,19 +60,19 @@ public class AuthService : IAuthService
 
         user = await _userRepository.AddAsync(user);
 
-        // Generate verification token and send email
+        // Generate verification token and send email (fire-and-forget)
         var token = await GenerateAndStoreVerificationAsync(user.Id, user.Email);
-        
-        try
+        _ = Task.Run(async () =>
         {
-            await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, token);
-        }
-        catch (Exception ex)
-        {
-            // Log error but don't fail registration
-            // User can still verify manually via resend endpoint
-            Console.WriteLine($"Failed to send verification email: {ex.Message}");
-        }
+            try
+            {
+                await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send verification email: {ex.Message}");
+            }
+        });
 
         return Map(user);
     }
@@ -100,6 +100,43 @@ public class AuthService : IAuthService
         if (user == null) return false;
 
         user.IsActive = true;
+        await _userRepository.UpdateAsync(user);
+
+        await _verificationRepository.MarkUsedAsync(record);
+        return true;
+    }
+
+    public async Task<bool> RequestPasswordResetAsync(string email)
+    {
+        var user = await _userRepository.GetByEmailAsync(email);
+        if (user == null) return false;
+
+        var token = await GenerateAndStoreVerificationAsync(user.Id, user.Email);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendPasswordResetEmailAsync(user.Email, user.FullName, token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send reset email: {ex.Message}");
+            }
+        });
+        return true;
+    }
+
+    public async Task<bool> ResetPasswordAsync(string token, string newPassword)
+    {
+        var record = await _verificationRepository.GetByTokenAsync(token);
+        if (record == null) return false;
+        if (record.IsUsed) return false;
+        if (record.ExpiresAt < DateTime.UtcNow) return false;
+
+        var user = await _userRepository.GetByEmailAsync(record.Email);
+        if (user == null) return false;
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         await _userRepository.UpdateAsync(user);
 
         await _verificationRepository.MarkUsedAsync(record);

@@ -84,4 +84,45 @@ public class EmailService : IEmailService
             throw;
         }
     }
+
+    public async Task SendPasswordResetEmailAsync(string toEmail, string userName, string resetToken)
+    {
+        try
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("BidNow", "xuanhungdz3011@gmail.com"));
+            message.To.Add(new MailboxAddress(userName, toEmail));
+            message.Subject = "Đặt lại mật khẩu BidNow";
+
+            var resetUrl = $"http://localhost:3000/reset-password?token={resetToken}";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = $@"
+                    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                        <h2 style='color: #1f2937;'>Yêu cầu đặt lại mật khẩu</h2>
+                        <p style='color: #4b5563;'>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản BidNow của bạn.</p>
+                        <div style='text-align: center; margin: 30px 0;'>
+                            <a href='{resetUrl}' style='background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;'>Đặt lại mật khẩu</a>
+                        </div>
+                        <p style='color: #6b7280; font-size: 14px;'>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>
+                    </div>"
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync("xuanhungdz3011@gmail.com", "ayvcnronaaibkssw");
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation($"Password reset email sent to {toEmail}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to send reset email to {toEmail}");
+            throw;
+        }
+    }
 }

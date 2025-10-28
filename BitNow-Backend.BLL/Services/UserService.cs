@@ -44,7 +44,8 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         var user = new User
         {
             Email = userDto.Email,
-            PasswordHash = HashPassword(userDto.Password),
+            // Use BCrypt for consistency with AuthService
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(userDto.Password),
             FullName = userDto.FullName,
             Phone = userDto.Phone,
             AvatarUrl = userDto.AvatarUrl,
@@ -96,11 +97,11 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         var user = await _userRepository.GetByIdAsync(userId);
         if (user == null) return false;
 
-        // Verify current password
-        if (!VerifyPassword(changePasswordDto.CurrentPassword, user.PasswordHash))
+        // Verify current password with BCrypt
+        if (!BCrypt.Net.BCrypt.Verify(changePasswordDto.CurrentPassword, user.PasswordHash))
             return false;
 
-        user.PasswordHash = HashPassword(changePasswordDto.NewPassword);
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(changePasswordDto.NewPassword);
         await _userRepository.UpdateAsync(user);
         return true;
     }
@@ -110,7 +111,7 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         var user = await _userRepository.GetByEmailAsync(email);
         if (user == null) return false;
 
-        return VerifyPassword(password, user.PasswordHash);
+        return BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
     }
 
     public async Task<bool> ActivateUserAsync(int id)
@@ -158,15 +159,5 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         };
     }
 
-    private static string HashPassword(string password)
-    {
-        // Simple hash implementation - in production, use BCrypt or similar
-        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(password + "salt"));
-    }
-
-    private static bool VerifyPassword(string password, string hash)
-    {
-        var hashedPassword = HashPassword(password);
-        return hashedPassword == hash;
-    }
+    // Deprecated simple hash helpers removed in favor of BCrypt
 }
