@@ -17,6 +17,9 @@ public class EmailService : IEmailService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gửi email xác minh tài khoản tới người dùng với đường dẫn chứa token xác minh.
+    /// </summary>
     public async Task SendVerificationEmailAsync(string toEmail, string userName, string verificationToken)
     {
         try
@@ -85,6 +88,9 @@ public class EmailService : IEmailService
         }
     }
 
+    /// <summary>
+    /// Gửi email đặt lại mật khẩu tới người dùng với đường dẫn chứa token đặt lại.
+    /// </summary>
     public async Task SendPasswordResetEmailAsync(string toEmail, string userName, string resetToken)
     {
         try

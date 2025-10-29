@@ -13,6 +13,10 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         _userRepository = userRepository;
     }
 
+    /// <summary>
+    /// Lấy thông tin người dùng theo Id và ánh xạ sang UserResponseDto.
+    /// Trả về null nếu không tìm thấy.
+    /// </summary>
     public async Task<UserResponseDto?> GetByIdAsync(int id)
     {
         var user = await _userRepository.GetByIdAsync(id);
@@ -20,6 +24,10 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return user != null ? MapToResponseDto(user) : null;
     }
 
+    /// <summary>
+    /// Lấy thông tin người dùng theo Email và ánh xạ sang UserResponseDto.
+    /// Trả về null nếu không tìm thấy.
+    /// </summary>
     public async Task<UserResponseDto?> GetByEmailAsync(string email)
     {
         var user = await _userRepository.GetByEmailAsync(email);
@@ -27,12 +35,19 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return user != null ? MapToResponseDto(user) : null;
     }
 
+    /// <summary>
+    /// Lấy danh sách người dùng có phân trang và ánh xạ sang UserResponseDto.
+    /// </summary>
     public async Task<IEnumerable<UserResponseDto>> GetAllAsync(int page = 1, int pageSize = 10)
     {
         var users = await _userRepository.GetPagedAsync(page, pageSize);
         return users.Select(MapToResponseDto).ToList();
     }
 
+    /// <summary>
+    /// Tạo người dùng mới từ UserCreateDto.
+    /// Kiểm tra trùng email, băm mật khẩu bằng BCrypt, trả về UserResponseDto.
+    /// </summary>
     public async Task<UserResponseDto> CreateAsync(UserCreateDto userDto)
     {
         // Check if email already exists
@@ -59,12 +74,15 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
 
         user = await _userRepository.AddAsync(user);
 
-        // Add default role
-        // Note: Role assignment would go via a RoleRepository (not implemented here)
+        // Thêm vai trò mặc định (nếu có repository vai trò riêng sẽ xử lý tại đó)
 
         return await GetByIdAsync(user.Id) ?? throw new InvalidOperationException("Failed to create user");
     }
 
+    /// <summary>
+    /// Cập nhật thông tin người dùng theo Id từ UserUpdateDto.
+    /// Chỉ cập nhật các trường có giá trị.
+    /// </summary>
     public async Task<UserResponseDto?> UpdateAsync(int id, UserUpdateDto userDto)
     {
         var user = await _userRepository.GetByIdAsync(id);
@@ -83,6 +101,9 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return await GetByIdAsync(id);
     }
 
+    /// <summary>
+    /// Xoá người dùng theo Id. Trả về true nếu thành công.
+    /// </summary>
     public async Task<bool> DeleteAsync(int id)
     {
         var user = await _userRepository.GetByIdAsync(id);
@@ -92,6 +113,10 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return true;
     }
 
+    /// <summary>
+    /// Đổi mật khẩu cho người dùng: xác thực mật khẩu hiện tại bằng BCrypt,
+    /// sau đó băm và lưu mật khẩu mới. Trả về true nếu đổi thành công.
+    /// </summary>
     public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto changePasswordDto)
     {
         var user = await _userRepository.GetByIdAsync(userId);
@@ -106,6 +131,9 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return true;
     }
 
+    /// <summary>
+    /// Xác thực thông tin đăng nhập: so khớp email, kiểm tra mật khẩu bằng BCrypt.
+    /// </summary>
     public async Task<bool> ValidateCredentialsAsync(string email, string password)
     {
         var user = await _userRepository.GetByEmailAsync(email);
@@ -114,6 +142,9 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
     }
 
+    /// <summary>
+    /// Kích hoạt tài khoản người dùng theo Id.
+    /// </summary>
     public async Task<bool> ActivateUserAsync(int id)
     {
         var user = await _userRepository.GetByIdAsync(id);
@@ -124,6 +155,9 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return true;
     }
 
+    /// <summary>
+    /// Vô hiệu hoá tài khoản người dùng theo Id.
+    /// </summary>
     public async Task<bool> DeactivateUserAsync(int id)
     {
         var user = await _userRepository.GetByIdAsync(id);
@@ -134,12 +168,18 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         return true;
     }
 
+    /// <summary>
+    /// Tìm kiếm người dùng theo từ khoá với phân trang, trả về danh sách UserResponseDto.
+    /// </summary>
     public async Task<IEnumerable<UserResponseDto>> SearchAsync(string searchTerm, int page = 1, int pageSize = 10)
     {
         var users = await _userRepository.SearchAsync(searchTerm, page, pageSize);
         return users.Select(MapToResponseDto).ToList();
     }
 
+    /// <summary>
+    /// Ánh xạ entity User sang DTO phản hồi UserResponseDto.
+    /// </summary>
     private static UserResponseDto MapToResponseDto(User user)
     {
         return new UserResponseDto
