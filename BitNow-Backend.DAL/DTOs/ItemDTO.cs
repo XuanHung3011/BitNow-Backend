@@ -49,4 +49,21 @@ namespace BitNow_Backend.DAL.DTOs
         public decimal? MaxPrice { get; set; }
         public string? Condition { get; set; }
     }
+
+    public class ItemFilterDto
+    {
+        public string? SearchTerm { get; set; }
+        public List<int>? CategoryIds { get; set; }  // Lọc nhiều category
+        public decimal? MinPrice { get; set; }
+        public decimal? MaxPrice { get; set; }
+        public List<string>? AuctionStatuses { get; set; }  // active, ending-soon, pending
+        public string? Condition { get; set; }
+    }
+    public class CategoryDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? Slug { get; set; }
+        public string? Icon { get; set; }
+    }
 }

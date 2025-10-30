@@ -15,5 +15,9 @@ namespace BitNow_Backend.BLL.IServices
         Task<IEnumerable<ItemResponseDto>> SearchApprovedItemsAsync(string searchTerm);
         Task<IEnumerable<ItemResponseDto>> SearchApprovedItemsPagedAsync(string searchTerm, int page, int pageSize);
         Task<(IEnumerable<ItemResponseDto> items, int totalCount)> SearchApprovedItemsWithCountAsync(string searchTerm, int page, int pageSize);
+
+        // New: Advanced Filter
+        Task<(IEnumerable<ItemResponseDto> items, int totalCount)> FilterApprovedItemsAsync(ItemFilterDto filter, int page, int pageSize);
+        Task<IEnumerable<CategoryDto>> GetCategoriesAsync();
     }
 }

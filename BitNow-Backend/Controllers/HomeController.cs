@@ -143,5 +143,56 @@ namespace BitNow_Backend.Controllers
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
+        [HttpPost("filter")]
+        public async Task<ActionResult<object>> FilterItems(
+        [FromBody] ItemFilterDto filter,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                if (page < 1) page = 1;
+                if (pageSize < 1) pageSize = 10;
+                if (pageSize > 100) pageSize = 100;
+
+                var (items, totalCount) = await _itemService.FilterApprovedItemsAsync(filter, page, pageSize);
+
+                var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                return Ok(new
+                {
+                    items,
+                    filter,
+                    pagination = new
+                    {
+                        currentPage = page,
+                        pageSize,
+                        totalCount,
+                        totalPages,
+                        hasNextPage = page < totalPages,
+                        hasPreviousPage = page > 1
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error filtering approved items");
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+        [HttpGet("categories")]
+        public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories()
+        {
+            try
+            {
+                var categories = await _itemService.GetCategoriesAsync();
+                return Ok(categories);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories");
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
     }
 }

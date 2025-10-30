@@ -1,4 +1,5 @@
-﻿using BitNow_Backend.DAL.Models;
+﻿using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.DAL.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,5 +17,11 @@ namespace BitNow_Backend.DAL.IRepositories
         Task<IEnumerable<Item>> SearchApprovedWithAuctionAsync(string searchTerm);
         Task<IEnumerable<Item>> SearchApprovedWithAuctionPagedAsync(string searchTerm, int page, int pageSize);
         Task<int> CountSearchApprovedAsync(string searchTerm);
+
+        // New: Advanced Filter
+        Task<IEnumerable<Item>> FilterApprovedItemsAsync(ItemFilterDto filter, int page, int pageSize);
+        Task<int> CountFilteredApprovedAsync(ItemFilterDto filter);
+
+        Task<IEnumerable<CategoryDto>> GetCategoriesAsync();
     }
 }
