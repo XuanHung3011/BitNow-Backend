@@ -18,6 +18,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailVerificationRepository, EmailVerificationRepository>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IItemService, ItemService>();
+builder.Services.AddScoped<IItemRepository, ItemRepository>();
 
 // Add services to the container.
 builder.Services.AddControllers();
