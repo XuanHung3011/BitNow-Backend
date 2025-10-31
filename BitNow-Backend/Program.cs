@@ -9,7 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
 builder.Services.AddDbContext<BidNowDbContext>(options =>
 {
-    options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn"));
+	options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn"));
 });
 
 // BLL: Register services
@@ -20,6 +20,10 @@ builder.Services.AddScoped<IEmailVerificationRepository, EmailVerificationReposi
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IWatchlistService, WatchlistService>();
+builder.Services.AddScoped<IWatchlistRepository, WatchlistRepository>();
+builder.Services.AddScoped<IAuctionService, AuctionService>();
+builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -27,12 +31,12 @@ builder.Services.AddControllers();
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
+	options.AddPolicy("AllowAll", policy =>
+	{
+		policy.AllowAnyOrigin()
+			  .AllowAnyMethod()
+			  .AllowAnyHeader();
+	});
 });
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -43,8 +47,8 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+	app.UseSwagger();
+	app.UseSwaggerUI();
 }
 
 // Use CORS early to handle preflight before any redirects
@@ -53,7 +57,7 @@ app.UseCors("AllowAll");
 // Avoid redirecting preflight requests in development (causes CORS failure)
 if (!app.Environment.IsDevelopment())
 {
-    app.UseHttpsRedirection();
+	app.UseHttpsRedirection();
 }
 
 app.UseAuthorization();
