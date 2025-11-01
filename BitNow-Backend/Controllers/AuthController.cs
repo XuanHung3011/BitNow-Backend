@@ -42,7 +42,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<UserResponseDto>> Login([FromBody] LoginRequest dto)
     {
-        try
+        try 
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
