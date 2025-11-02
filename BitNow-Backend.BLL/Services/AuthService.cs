@@ -18,11 +18,33 @@ public class AuthService : IAuthService
         _emailService = emailService;
     }
 
+    /// <summary>
+    /// Đăng ký tài khoản mới: kiểm tra trùng email, tạo user (IsActive=false),
+    /// sinh token xác minh và gửi email xác minh (không chặn phản hồi).
+    /// Nếu email đã tồn tại nhưng chưa xác minh, gửi lại email xác minh và trả về thông tin user.
+    /// </summary>
     public async Task<UserResponseDto> RegisterAsync(UserCreateDto dto)
     {
         var existing = await _userRepository.GetByEmailAsync(dto.Email);
         if (existing != null)
         {
+            // If user exists but not verified yet, resend verification email and return existing user
+            if (existing.IsActive != true)
+            {
+                var resendToken = await GenerateAndStoreVerificationAsync(existing.Id, existing.Email);
+                try
+                {
+                    await _emailService.SendVerificationEmailAsync(existing.Email, existing.FullName, resendToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to resend verification email: {ex.Message}");
+                }
+
+                return Map(existing);
+            }
+
+            // Active user already exists
             throw new InvalidOperationException("Email already exists");
         }
 
@@ -43,23 +65,27 @@ public class AuthService : IAuthService
 
         user = await _userRepository.AddAsync(user);
 
-        // Generate verification token and send email
+        // Generate verification token and send email (fire-and-forget)
         var token = await GenerateAndStoreVerificationAsync(user.Id, user.Email);
-        
-        try
+        _ = Task.Run(async () =>
         {
-            await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, token);
-        }
-        catch (Exception ex)
-        {
-            // Log error but don't fail registration
-            // User can still verify manually via resend endpoint
-            Console.WriteLine($"Failed to send verification email: {ex.Message}");
-        }
+            try
+            {
+                await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send verification email: {ex.Message}");
+            }
+        });
 
         return Map(user);
     }
 
+    /// <summary>
+    /// Đăng nhập: kiểm tra tồn tại tài khoản, đối chiếu mật khẩu (BCrypt),
+    /// và đảm bảo email đã được xác minh.
+    /// </summary>
     public async Task<UserResponseDto?> LoginAsync(string email, string password)
     {
         var user = await _userRepository.GetByEmailAsync(email);
@@ -72,6 +98,10 @@ public class AuthService : IAuthService
         return Map(user);
     }
 
+    /// <summary>
+    /// Xác minh email từ token: kiểm tra token còn hạn/chưa dùng, kích hoạt tài khoản,
+    /// đánh dấu token đã sử dụng.
+    /// </summary>
     public async Task<bool> VerifyEmailAsync(string token)
     {
         var record = await _verificationRepository.GetByTokenAsync(token);
@@ -89,6 +119,54 @@ public class AuthService : IAuthService
         return true;
     }
 
+    /// <summary>
+    /// Yêu cầu đặt lại mật khẩu: nếu email tồn tại thì sinh token reset và gửi email (không chặn phản hồi).
+    /// Trả về true nếu tồn tại user tương ứng.
+    /// </summary>
+    public async Task<bool> RequestPasswordResetAsync(string email)
+    {
+        var user = await _userRepository.GetByEmailAsync(email);
+        if (user == null) return false;
+
+        var token = await GenerateAndStoreVerificationAsync(user.Id, user.Email);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendPasswordResetEmailAsync(user.Email, user.FullName, token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send reset email: {ex.Message}");
+            }
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Đặt lại mật khẩu bằng token: kiểm tra token hợp lệ, cập nhật mật khẩu mới (BCrypt) và đánh dấu token đã dùng.
+    /// </summary>
+    public async Task<bool> ResetPasswordAsync(string token, string newPassword)
+    {
+        var record = await _verificationRepository.GetByTokenAsync(token);
+        if (record == null) return false;
+        if (record.IsUsed) return false;
+        if (record.ExpiresAt < DateTime.UtcNow) return false;
+
+        var user = await _userRepository.GetByEmailAsync(record.Email);
+        if (user == null) return false;
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        await _userRepository.UpdateAsync(user);
+
+        await _verificationRepository.MarkUsedAsync(record);
+        return true;
+    }
+
+    /// <summary>
+    /// Tạo token ngẫu nhiên (URL-safe), lưu bản ghi xác minh kèm hạn (24h) và trạng thái.
+    /// Trả về chuỗi token.
+    /// </summary>
     public async Task<string> GenerateAndStoreVerificationAsync(int userId, string email)
     {
         var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
@@ -108,6 +186,9 @@ public class AuthService : IAuthService
         return token;
     }
 
+    /// <summary>
+    /// Tiện ích gửi email xác minh khi biết trước userId và token (lấy tên hiển thị từ DB).
+    /// </summary>
     public async Task SendVerificationEmailAsync(string email, int userId, string token)
     {
         // Get user info for email
@@ -117,6 +198,9 @@ public class AuthService : IAuthService
         await _emailService.SendVerificationEmailAsync(email, userName, token);
     }
 
+    /// <summary>
+    /// Ánh xạ entity User sang UserResponseDto cho phía client.
+    /// </summary>
     private static UserResponseDto Map(User user)
     {
         return new UserResponseDto
