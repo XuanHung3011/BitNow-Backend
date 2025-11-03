@@ -19,7 +19,7 @@ namespace BitNow_Backend.Controllers
         /// Get all categories
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<CategoryDto>>> GetAllCategories()
+        public async Task<ActionResult<IEnumerable<CategoryDtos>>> GetAllCategories()
         {
             var categories = await _categoryService.GetAllCategoriesAsync();
             return Ok(categories);
@@ -29,7 +29,7 @@ namespace BitNow_Backend.Controllers
         /// Get categories with filtering, sorting and pagination
         /// </summary>
         [HttpGet("paged")]
-        public async Task<ActionResult<PaginatedResult<CategoryDto>>> GetCategoriesPaged(
+        public async Task<ActionResult<PaginatedResult<CategoryDtos>>> GetCategoriesPaged(
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? sortBy = "Name",
             [FromQuery] string? sortOrder = "asc",
@@ -59,7 +59,7 @@ namespace BitNow_Backend.Controllers
         /// Get category by ID
         /// </summary>
         [HttpGet("{id}")]
-        public async Task<ActionResult<CategoryDto>> GetCategory(int id)
+        public async Task<ActionResult<CategoryDtos>> GetCategory(int id)
         {
             var category = await _categoryService.GetCategoryByIdAsync(id);
             if (category == null)
@@ -73,7 +73,7 @@ namespace BitNow_Backend.Controllers
         /// Get category by slug
         /// </summary>
         [HttpGet("slug/{slug}")]
-        public async Task<ActionResult<CategoryDto>> GetCategoryBySlug(string slug)
+        public async Task<ActionResult<CategoryDtos>> GetCategoryBySlug(string slug)
         {
             var category = await _categoryService.GetCategoryBySlugAsync(slug);
             if (category == null)
@@ -87,7 +87,7 @@ namespace BitNow_Backend.Controllers
         /// Create a new category
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult<CategoryDto>> CreateCategory(CreateCategoryDto createCategoryDto)
+        public async Task<ActionResult<CategoryDtos>> CreateCategory(CreateCategoryDtos createCategoryDtos)
         {
             try
             {
@@ -96,7 +96,7 @@ namespace BitNow_Backend.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var category = await _categoryService.CreateCategoryAsync(createCategoryDto);
+                var category = await _categoryService.CreateCategoryAsync(createCategoryDtos);
                 return CreatedAtAction(nameof(GetCategory), new { id = category.Id }, category);
             }
             catch (InvalidOperationException ex)
@@ -109,7 +109,7 @@ namespace BitNow_Backend.Controllers
         /// Update an existing category
         /// </summary>
         [HttpPut("{id}")]
-        public async Task<ActionResult<CategoryDto>> UpdateCategory(int id, UpdateCategoryDto updateCategoryDto)
+        public async Task<ActionResult<CategoryDtos>> UpdateCategory(int id, UpdateCategoryDtos updateCategoryDtos)
         {
             try
             {
@@ -118,7 +118,7 @@ namespace BitNow_Backend.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var category = await _categoryService.UpdateCategoryAsync(id, updateCategoryDto);
+                var category = await _categoryService.UpdateCategoryAsync(id, updateCategoryDtos);
                 if (category == null)
                 {
                     return NotFound($"Category with ID {id} not found.");

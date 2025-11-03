@@ -2,7 +2,7 @@ using System;
 
 namespace BitNow_Backend.DAL.DTOs
 {
-    public class CategoryDto
+    public class CategoryDtos
     {
         public int Id { get; set; }
         public string Name { get; set; } = null!;
@@ -12,7 +12,7 @@ namespace BitNow_Backend.DAL.DTOs
         public DateTime? CreatedAt { get; set; }
     }
 
-    public class CreateCategoryDto
+    public class CreateCategoryDtos
     {
         public string Name { get; set; } = null!;
         public string Slug { get; set; } = null!;
@@ -20,7 +20,7 @@ namespace BitNow_Backend.DAL.DTOs
         public string? Icon { get; set; }
     }
 
-    public class UpdateCategoryDto
+    public class UpdateCategoryDtos
     {
         public string Name { get; set; } = null!;
         public string Slug { get; set; } = null!;

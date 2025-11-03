@@ -14,16 +14,16 @@ namespace BitNow_Backend.BLL.Services
             _categoryRepository = categoryRepository;
         }
 
-        public async Task<IEnumerable<CategoryDto>> GetAllCategoriesAsync()
+        public async Task<IEnumerable<CategoryDtos>> GetAllCategoriesAsync()
         {
             var categories = await _categoryRepository.GetAllAsync();
             return categories.Select(MapToDto);
         }
 
-        public async Task<PaginatedResult<CategoryDto>> GetCategoriesPagedAsync(CategoryFilterDto filter)
+        public async Task<PaginatedResult<CategoryDtos>> GetCategoriesPagedAsync(CategoryFilterDto filter)
         {
             var result = await _categoryRepository.GetPagedAsync(filter);
-            return new PaginatedResult<CategoryDto>
+            return new PaginatedResult<CategoryDtos>
             {
                 Data = result.Data.Select(MapToDto),
                 TotalCount = result.TotalCount,
@@ -32,32 +32,32 @@ namespace BitNow_Backend.BLL.Services
             };
         }
 
-        public async Task<CategoryDto?> GetCategoryByIdAsync(int id)
+        public async Task<CategoryDtos?> GetCategoryByIdAsync(int id)
         {
             var category = await _categoryRepository.GetByIdAsync(id);
             return category != null ? MapToDto(category) : null;
         }
 
-        public async Task<CategoryDto?> GetCategoryBySlugAsync(string slug)
+        public async Task<CategoryDtos?> GetCategoryBySlugAsync(string slug)
         {
             var category = await _categoryRepository.GetBySlugAsync(slug);
             return category != null ? MapToDto(category) : null;
         }
 
-        public async Task<CategoryDto> CreateCategoryAsync(CreateCategoryDto createCategoryDto)
+        public async Task<CategoryDtos> CreateCategoryAsync(CreateCategoryDtos createCategoryDtos)
         {
             // Check if slug already exists
-            if (await _categoryRepository.SlugExistsAsync(createCategoryDto.Slug))
+            if (await _categoryRepository.SlugExistsAsync(createCategoryDtos.Slug))
             {
-                throw new InvalidOperationException($"Category with slug '{createCategoryDto.Slug}' already exists.");
+                throw new InvalidOperationException($"Category with slug '{createCategoryDtos.Slug}' already exists.");
             }
 
             var category = new Category
             {
-                Name = createCategoryDto.Name,
-                Slug = createCategoryDto.Slug,
-                Description = createCategoryDto.Description,
-                Icon = createCategoryDto.Icon,
+                Name = createCategoryDtos.Name,
+                Slug = createCategoryDtos.Slug,
+                Description = createCategoryDtos.Description,
+                Icon = createCategoryDtos.Icon,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -65,22 +65,22 @@ namespace BitNow_Backend.BLL.Services
             return MapToDto(createdCategory);
         }
 
-        public async Task<CategoryDto?> UpdateCategoryAsync(int id, UpdateCategoryDto updateCategoryDto)
+        public async Task<CategoryDtos?> UpdateCategoryAsync(int id, UpdateCategoryDtos updateCategoryDtos)
         {
             var category = await _categoryRepository.GetByIdAsync(id);
             if (category == null)
                 return null;
 
             // Check if slug already exists (excluding current category)
-            if (await _categoryRepository.SlugExistsAsync(updateCategoryDto.Slug, id))
+            if (await _categoryRepository.SlugExistsAsync(updateCategoryDtos.Slug, id))
             {
-                throw new InvalidOperationException($"Category with slug '{updateCategoryDto.Slug}' already exists.");
+                throw new InvalidOperationException($"Category with slug '{updateCategoryDtos.Slug}' already exists.");
             }
 
-            category.Name = updateCategoryDto.Name;
-            category.Slug = updateCategoryDto.Slug;
-            category.Description = updateCategoryDto.Description;
-            category.Icon = updateCategoryDto.Icon;
+            category.Name = updateCategoryDtos.Name;
+            category.Slug = updateCategoryDtos.Slug;
+            category.Description = updateCategoryDtos.Description;
+            category.Icon = updateCategoryDtos.Icon;
 
             var updatedCategory = await _categoryRepository.UpdateAsync(category);
             return MapToDto(updatedCategory);
@@ -101,9 +101,9 @@ namespace BitNow_Backend.BLL.Services
             return await _categoryRepository.SlugExistsAsync(slug, excludeId);
         }
 
-        private static CategoryDto MapToDto(Category category)
+        private static CategoryDtos MapToDto(Category category)
         {
-            return new CategoryDto
+            return new CategoryDtos
             {
                 Id = category.Id,
                 Name = category.Name,
