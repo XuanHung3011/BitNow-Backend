@@ -83,6 +83,48 @@ public class AuthController : ControllerBase
         }
     }
 
+    public class ForgotPasswordRequest { public string Email { get; set; } = null!; }
+
+    [HttpPost("forgot-password")]
+    public async Task<ActionResult> ForgotPassword([FromBody] ForgotPasswordRequest dto)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dto.Email))
+                return BadRequest(new { message = "Email is required" });
+
+            var exists = await _authService.RequestPasswordResetAsync(dto.Email);
+            if (!exists)
+            {
+                return NotFound(new { message = "Email chưa được đăng ký" });
+            }
+
+            return Ok(new { message = "Đã gửi link đặt lại mật khẩu đến email của bạn" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Forgot password error");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    public class ResetPasswordRequest { public string Token { get; set; } = null!; public string NewPassword { get; set; } = null!; }
+
+    [HttpPost("reset-password")]
+    public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordRequest dto)
+    {
+        try
+        {
+            var ok = await _authService.ResetPasswordAsync(dto.Token, dto.NewPassword);
+            if (!ok) return BadRequest(new { message = "Invalid or expired token" });
+            return Ok(new { message = "Password reset successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Reset password error");
+            return StatusCode(500, "Internal server error");
+        }
+    }
     public class ResendRequest { public int UserId { get; set; } public string Email { get; set; } = null!; }
 
     [HttpPost("resend-verification")]
