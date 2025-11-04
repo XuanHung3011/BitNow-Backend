@@ -23,5 +23,8 @@ namespace BitNow_Backend.DAL.IRepositories
         Task<int> CountFilteredApprovedAsync(ItemFilterDto filter);
 
         Task<IEnumerable<CategoryDto>> GetCategoriesAsync();
+
+        // Hot items: items with active auctions ordered by bid/activity
+        Task<IEnumerable<Item>> GetHotApprovedActiveAuctionsAsync(int limit);
     }
 }

@@ -66,4 +66,52 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Seed admin from configuration
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var ctx = services.GetRequiredService<BidNowDbContext>();
+        var config = services.GetRequiredService<IConfiguration>();
+        var email = config["Admin:Email"];
+        var password = config["Admin:Password"];
+        var fullName = config["Admin:FullName"] ?? "Administrator";
+
+        if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+        {
+            var existing = await ctx.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.Email == email);
+            if (existing == null)
+            {
+                var admin = new BitNow_Backend.DAL.Models.User
+                {
+                    Email = email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                    FullName = fullName,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    ReputationScore = 0.00m,
+                    TotalRatings = 0,
+                    TotalSales = 0,
+                    TotalPurchases = 0
+                };
+                ctx.Users.Add(admin);
+                await ctx.SaveChangesAsync();
+
+                ctx.UserRoles.Add(new BitNow_Backend.DAL.Models.UserRole { UserId = admin.Id, Role = "admin", CreatedAt = DateTime.UtcNow });
+                await ctx.SaveChangesAsync();
+            }
+            else if (!existing.UserRoles.Any(r => r.Role == "admin"))
+            {
+                ctx.UserRoles.Add(new BitNow_Backend.DAL.Models.UserRole { UserId = existing.Id, Role = "admin", CreatedAt = DateTime.UtcNow });
+                await ctx.SaveChangesAsync();
+            }
+        }
+    }
+    catch (Exception)
+    {
+        // swallow seeding errors to not block app startup
+    }
+}
+
 app.Run();

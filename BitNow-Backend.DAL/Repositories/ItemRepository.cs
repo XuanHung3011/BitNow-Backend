@@ -243,5 +243,31 @@ namespace BitNow_Backend.DAL.Repositories
                 })
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Item>> GetHotApprovedActiveAuctionsAsync(int limit)
+        {
+            if (limit <= 0) limit = 8;
+
+            // Items approved and with at least one active auction, ordered by activity
+            return await _context.Items
+                .Include(i => i.Category)
+                .Include(i => i.Seller)
+                .Include(i => i.Auctions)
+                .Where(i => i.Status == "approved" && i.Auctions.Any(a => a.Status == "active"))
+                .OrderByDescending(i => i.Auctions
+                    .Where(a => a.Status == "active")
+                    .Select(a => (int?)a.BidCount)
+                    .Max() ?? 0)
+                .ThenByDescending(i => i.Auctions
+                    .Where(a => a.Status == "active")
+                    .Select(a => (decimal?)a.CurrentBid)
+                    .Max() ?? 0)
+                .ThenBy(i => i.Auctions
+                    .Where(a => a.Status == "active")
+                    .Select(a => a.EndTime)
+                    .Min())
+                .Take(limit)
+                .ToListAsync();
+        }
     }
 }

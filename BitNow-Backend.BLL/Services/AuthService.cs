@@ -65,6 +65,17 @@ public class AuthService : IAuthService
 
         user = await _userRepository.AddAsync(user);
 
+        // Gán vai trò mặc định buyer (không làm hỏng quy trình nếu lỗi)
+        try
+        {
+            user.UserRoles.Add(new UserRole { UserId = user.Id, Role = "buyer", CreatedAt = DateTime.UtcNow });
+            await _userRepository.UpdateAsync(user);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to assign default role to user {user.Id}: {ex.Message}");
+        }
+
         // Generate verification token and send email (fire-and-forget)
         var token = await GenerateAndStoreVerificationAsync(user.Id, user.Email);
         _ = Task.Run(async () =>

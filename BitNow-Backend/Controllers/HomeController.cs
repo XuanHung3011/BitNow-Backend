@@ -194,5 +194,25 @@ namespace BitNow_Backend.Controllers
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
+
+        /// <summary>
+        /// Get hottest active auctions (by bid count, then current bid).
+        /// </summary>
+        [HttpGet("hot")]
+        public async Task<ActionResult<IEnumerable<ItemResponseDto>>> GetHot([FromQuery] int limit = 8)
+        {
+            try
+            {
+                if (limit < 1) limit = 8;
+                if (limit > 24) limit = 24;
+                var items = await _itemService.GetHotApprovedItemsAsync(limit);
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting hot auctions");
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
     }
 }
