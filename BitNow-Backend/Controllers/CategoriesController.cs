@@ -138,14 +138,30 @@ namespace BitNow_Backend.Controllers
         [HttpDelete("{id}")]
         public async Task<ActionResult> DeleteCategory(int id)
         {
-            var result = await _categoryService.DeleteCategoryAsync(id);
-            if (!result)
+            try
             {
-                return NotFound($"Category with ID {id} not found.");
-            }
+                var result = await _categoryService.DeleteCategoryAsync(id);
 
-            return NoContent();
+                if (!result)
+                {
+                    return NotFound(new { message = $"Không tìm thấy danh mục có ID {id}." });
+                }
+
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Trả về lỗi 409 cùng thông báo rõ ràng (FE sẽ hiển thị message này)
+                return Conflict(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                // Giữ message thân thiện cho người dùng, không lộ lỗi kỹ thuật
+                return StatusCode(500, new { message = "Danh mục này đang có sản phẩm liên kết và không thể xóa." });
+            }
         }
+
+
 
         /// <summary>
         /// Check if category exists
@@ -166,5 +182,23 @@ namespace BitNow_Backend.Controllers
             var exists = await _categoryService.SlugExistsAsync(slug, excludeId);
             return Ok(exists);
         }
+        [HttpGet("{id}/is-in-use")]
+        public async Task<ActionResult> IsCategoryInUse(int id)
+        {
+            try
+            {
+                var isInUse = await _categoryService.IsCategoryInUseAsync(id);
+                return Ok(new { id, isInUse });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi kiểm tra danh mục." });
+            }
+        }
+
     }
 }

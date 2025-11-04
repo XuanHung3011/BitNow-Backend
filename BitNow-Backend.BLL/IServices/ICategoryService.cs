@@ -13,5 +13,6 @@ namespace BitNow_Backend.BLL.IServices
         Task<bool> DeleteCategoryAsync(int id);
         Task<bool> CategoryExistsAsync(int id);
         Task<bool> SlugExistsAsync(string slug, int? excludeId = null);
+        Task<bool> IsCategoryInUseAsync(int id);
     }
 }
