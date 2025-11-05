@@ -227,6 +227,50 @@ public class UsersController : ControllerBase
         }
     }
 
+    public class AddRoleRequest { public string Role { get; set; } = string.Empty; }
+
+    /// <summary>
+    /// Add a role to user (buyer/seller/admin)
+    /// </summary>
+    [HttpPost("{id}/roles")]
+    public async Task<ActionResult> AddRole(int id, [FromBody] AddRoleRequest body)
+    {
+        try
+        {
+            if (body == null || string.IsNullOrWhiteSpace(body.Role))
+                return BadRequest(new { message = "role is required" });
+
+            var ok = await _userService.AddRoleAsync(id, body.Role);
+            if (!ok) return BadRequest(new { message = "cannot add role" });
+            return Ok(new { message = "role added" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding role for user {UserId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Remove a role from user (buyer/seller/admin)
+    /// </summary>
+    [HttpDelete("{id}/roles/{role}")]
+    public async Task<ActionResult> RemoveRole(int id, string role)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(role)) return BadRequest(new { message = "role is required" });
+            var ok = await _userService.RemoveRoleAsync(id, role);
+            if (!ok) return BadRequest(new { message = "cannot remove role" });
+            return Ok(new { message = "role removed" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing role for user {UserId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
     /// <summary>
     /// Search users
     /// </summary>

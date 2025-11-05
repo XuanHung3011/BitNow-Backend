@@ -19,5 +19,8 @@ namespace BitNow_Backend.BLL.IServices
         // New: Advanced Filter
         Task<(IEnumerable<ItemResponseDto> items, int totalCount)> FilterApprovedItemsAsync(ItemFilterDto filter, int page, int pageSize);
         Task<IEnumerable<CategoryDto>> GetCategoriesAsync();
+
+        // Hot
+        Task<IEnumerable<ItemResponseDto>> GetHotApprovedItemsAsync(int limit);
     }
 }

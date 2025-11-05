@@ -87,6 +87,12 @@ namespace BitNow_Backend.BLL.Services
             return await _itemRepository.GetCategoriesAsync();
         }
 
+        public async Task<IEnumerable<ItemResponseDto>> GetHotApprovedItemsAsync(int limit)
+        {
+            var items = await _itemRepository.GetHotApprovedActiveAuctionsAsync(limit);
+            return items.Select(MapToResponseDto).ToList();
+        }
+
         private static ItemResponseDto MapToResponseDto(Item item)
         {
             // Lấy auction mới nhất hoặc đang active của item

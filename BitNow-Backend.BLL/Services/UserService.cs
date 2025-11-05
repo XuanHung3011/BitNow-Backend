@@ -74,7 +74,16 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
 
         user = await _userRepository.AddAsync(user);
 
-        // Thêm vai trò mặc định (nếu có repository vai trò riêng sẽ xử lý tại đó)
+        // Thêm vai trò mặc định buyer (best-effort)
+        try
+        {
+            user.UserRoles.Add(new UserRole { UserId = user.Id, Role = "buyer", CreatedAt = DateTime.UtcNow });
+            await _userRepository.UpdateAsync(user);
+        }
+        catch
+        {
+            // ignore role add failure here
+        }
 
         return await GetByIdAsync(user.Id) ?? throw new InvalidOperationException("Failed to create user");
     }
@@ -200,4 +209,38 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
     }
 
     // Deprecated simple hash helpers removed in favor of BCrypt
+
+    public async Task<bool> AddRoleAsync(int userId, string role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return false;
+        role = role.Trim().ToLowerInvariant();
+
+        var allowed = new HashSet<string>(new[] { "buyer", "seller", "admin" });
+        if (!allowed.Contains(role)) return false;
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null) return false;
+
+        if (user.UserRoles.Any(r => r.Role == role)) return true; // already has role
+
+        user.UserRoles.Add(new UserRole { UserId = user.Id, Role = role, CreatedAt = DateTime.UtcNow });
+        await _userRepository.UpdateAsync(user);
+        return true;
+    }
+
+    public async Task<bool> RemoveRoleAsync(int userId, string role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return false;
+        role = role.Trim().ToLowerInvariant();
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null) return false;
+
+        var toRemove = user.UserRoles.FirstOrDefault(r => r.Role == role);
+        if (toRemove == null) return true;
+
+        user.UserRoles.Remove(toRemove);
+        await _userRepository.UpdateAsync(user);
+        return true;
+    }
 }
