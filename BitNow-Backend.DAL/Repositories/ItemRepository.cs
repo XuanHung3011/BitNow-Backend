@@ -44,8 +44,12 @@ namespace BitNow_Backend.DAL.Repositories
             return await _context.Items
                 .Where(i => i.SellerId == sellerId)
                 .Include(i => i.Category)
+                .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .FirstOrDefaultAsync(i => i.Id == id);
+                .OrderByDescending(i => i.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<Item>> GetAllApprovedWithAuctionAsync()
@@ -113,8 +117,7 @@ namespace BitNow_Backend.DAL.Repositories
                 throw;
             }
         }
-    }
-}
+
         public async Task<int> CountApprovedAsync()
         {
             return await _context.Items

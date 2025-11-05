@@ -1,4 +1,4 @@
-﻿namespace BitNow_Backend.DTOs
+﻿namespace BitNow_Backend.DAL.DTOs
 {
     public class CategoryItemDto
     {

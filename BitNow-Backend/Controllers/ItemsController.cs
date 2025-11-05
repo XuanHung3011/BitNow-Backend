@@ -1,10 +1,10 @@
 ﻿using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
-using BitNow_Backend.DTOs; 
+using BitNow_Backend.DAL.DTOs; 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace BitNow_Backend.API.Controllers
+namespace BitNow_Backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -18,9 +18,11 @@ namespace BitNow_Backend.API.Controllers
             _itemRepository = itemRepository;
         }
 
-        private ItemDto MapToItemDto(Item item)
+        private ItemResponseDto MapToItemDto(Item item)
         {
-            return new ItemDto
+            var activeAuction = item.Auctions?.OrderByDescending(a => a.EndTime).FirstOrDefault();
+
+            return new ItemResponseDto
             {
                 Id = item.Id,
                 Title = item.Title,
@@ -29,24 +31,27 @@ namespace BitNow_Backend.API.Controllers
                 Condition = item.Condition,
                 Location = item.Location,
                 Status = item.Status,
-                CreatedAt = (DateTime)item.CreatedAt,
+                CreatedAt = item.CreatedAt,
                 Images = item.Images,
 
-                Category = item.Category != null ? new CategoryItemDto
-                {
-                    Id = item.Category.Id,
-                    Name = item.Category.Name,
-                    Slug = item.Category.Slug,
-                    Icon = item.Category.Icon
-                } : null,
+                CategoryId = item.Category?.Id ?? item.CategoryId,
+                CategoryName = item.Category?.Name,
+                CategorySlug = item.Category?.Slug,
+                CategoryIcon = item.Category?.Icon,
 
-                Seller = item.Seller != null ? new UserSellerDto
-                {
-                    Id = item.Seller.Id,
-                    FullName = item.Seller.FullName,
-                    Email = item.Seller.Email,
-                    ReputationScore = (decimal)item.Seller.ReputationScore
-                } : null
+                SellerId = item.Seller?.Id ?? item.SellerId,
+                SellerName = item.Seller?.FullName,
+                SellerEmail = item.Seller?.Email,
+                SellerAvatar = item.Seller?.AvatarUrl,
+                SellerReputationScore = item.Seller?.ReputationScore,
+                SellerTotalSales = item.Seller?.TotalSales,
+
+                AuctionId = activeAuction?.Id,
+                StartingBid = activeAuction?.StartingBid,
+                CurrentBid = activeAuction?.CurrentBid,
+                BidCount = activeAuction?.BidCount,
+                AuctionEndTime = activeAuction?.EndTime,
+                AuctionStatus = activeAuction?.Status
             };
         }
 

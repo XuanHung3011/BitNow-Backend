@@ -27,7 +27,7 @@ builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
 builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 
-builder.Services.AddScoped<IItemRepository, ItemRepository>();
+// duplicate registration removed after merge
 
 // Add services to the container.
 builder.Services.AddControllers();
