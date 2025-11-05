@@ -160,16 +160,28 @@ public class UsersController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            // Validate new password length
+            if (changePasswordDto.NewPassword.Length < 6)
+                return BadRequest(new { message = "Mật khẩu mới phải có ít nhất 6 ký tự" });
+
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = "Không tìm thấy người dùng" });
+
+            // Verify current password
+            if (!await _userService.ValidateCredentialsAsync(user.Email, changePasswordDto.CurrentPassword))
+                return Unauthorized(new { message = "Mật khẩu hiện tại không đúng" });
+
             var result = await _userService.ChangePasswordAsync(id, changePasswordDto);
             if (!result)
-                return BadRequest("Invalid current password or user not found");
+                return BadRequest(new { message = "Không thể đổi mật khẩu" });
 
-            return Ok(new { message = "Password changed successfully" });
+            return Ok(new { message = "Đổi mật khẩu thành công" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error changing password for user {UserId}", id);
-            return StatusCode(500, "Internal server error");
+            return StatusCode(500, new { message = "Lỗi server, vui lòng thử lại sau" });
         }
     }
 
@@ -211,6 +223,50 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deactivating user {UserId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    public class AddRoleRequest { public string Role { get; set; } = string.Empty; }
+
+    /// <summary>
+    /// Add a role to user (buyer/seller/admin)
+    /// </summary>
+    [HttpPost("{id}/roles")]
+    public async Task<ActionResult> AddRole(int id, [FromBody] AddRoleRequest body)
+    {
+        try
+        {
+            if (body == null || string.IsNullOrWhiteSpace(body.Role))
+                return BadRequest(new { message = "role is required" });
+
+            var ok = await _userService.AddRoleAsync(id, body.Role);
+            if (!ok) return BadRequest(new { message = "cannot add role" });
+            return Ok(new { message = "role added" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding role for user {UserId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Remove a role from user (buyer/seller/admin)
+    /// </summary>
+    [HttpDelete("{id}/roles/{role}")]
+    public async Task<ActionResult> RemoveRole(int id, string role)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(role)) return BadRequest(new { message = "role is required" });
+            var ok = await _userService.RemoveRoleAsync(id, role);
+            if (!ok) return BadRequest(new { message = "cannot remove role" });
+            return Ok(new { message = "role removed" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing role for user {UserId}", id);
             return StatusCode(500, "Internal server error");
         }
     }
