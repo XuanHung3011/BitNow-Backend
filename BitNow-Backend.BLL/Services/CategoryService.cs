@@ -113,5 +113,10 @@ namespace BitNow_Backend.BLL.Services
                 CreatedAt = category.CreatedAt
             };
         }
+        public async Task<bool> IsCategoryInUseAsync(int id)
+        {
+            return await _categoryRepository.IsCategoryInUseAsync(id);
+        }
+
     }
 }

@@ -90,14 +90,19 @@ namespace BitNow_Backend.DAL.Repositories
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var category = await _context.Categories.FindAsync(id);
+            var category = await _context.Categories.Include(c => c.Items).FirstOrDefaultAsync(c => c.Id == id);
             if (category == null)
                 return false;
+
+            if (category.Items.Any())
+                throw new InvalidOperationException("Danh mục này đang có sản phẩm liên kết và không thể xóa.");
 
             _context.Categories.Remove(category);
             await _context.SaveChangesAsync();
             return true;
         }
+
+
 
         public async Task<bool> ExistsAsync(int id)
         {
@@ -116,5 +121,17 @@ namespace BitNow_Backend.DAL.Repositories
 
             return await query.AnyAsync();
         }
+        public async Task<bool> IsCategoryInUseAsync(int id)
+        {
+            var category = await _context.Categories
+                .Include(c => c.Items)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (category == null)
+                throw new KeyNotFoundException($"Không tìm thấy danh mục có ID {id}.");
+
+            return category.Items.Any();
+        }
+
     }
 }
