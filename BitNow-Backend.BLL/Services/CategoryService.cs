@@ -101,6 +101,11 @@ namespace BitNow_Backend.BLL.Services
             return await _categoryRepository.SlugExistsAsync(slug, excludeId);
         }
 
+        public async Task<bool> NameExistsAsync(string name, int? excludeId = null)
+        {
+            return await _categoryRepository.NameExistsAsync(name, excludeId);
+        }
+
         private static CategoryDtos MapToDto(Category category)
         {
             return new CategoryDtos
