@@ -12,7 +12,8 @@ namespace BitNow_Backend.DAL.DTOs
 		public int CategoryId { get; set; }
         public string? CategoryName { get; set; }
         public int SellerId { get; set; }
-		public decimal StartingBid { get; set; }
+        public string? SellerName { get; set; }
+        public decimal StartingBid { get; set; }
 		public decimal? CurrentBid { get; set; }
 		public decimal? BuyNowPrice { get; set; }
 		public DateTime StartTime { get; set; }
