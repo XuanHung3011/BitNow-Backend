@@ -121,6 +121,18 @@ namespace BitNow_Backend.DAL.Repositories
 
             return await query.AnyAsync();
         }
+
+        public async Task<bool> NameExistsAsync(string name, int? excludeId = null)
+        {
+            var query = _context.Categories.Where(c => c.Name.ToLower() == name.ToLower());
+            
+            if (excludeId.HasValue)
+            {
+                query = query.Where(c => c.Id != excludeId.Value);
+            }
+
+            return await query.AnyAsync();
+        }
         public async Task<bool> IsCategoryInUseAsync(int id)
         {
             var category = await _context.Categories
