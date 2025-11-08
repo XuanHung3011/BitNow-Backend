@@ -22,5 +22,12 @@ namespace BitNow_Backend.BLL.IServices
 
         // Hot
         Task<IEnumerable<ItemResponseDto>> GetHotApprovedItemsAsync(int limit);
+
+        // Get all items with filtering and sorting (not just approved)
+        Task<PaginatedResult<ItemResponseDto>> GetAllItemsWithFilterAsync(ItemFilterAllDto filter);
+
+        // Update item status
+        Task<bool> ApproveItemAsync(int id);
+        Task<bool> RejectItemAsync(int id);
     }
 }

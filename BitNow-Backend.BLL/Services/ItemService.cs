@@ -93,6 +93,30 @@ namespace BitNow_Backend.BLL.Services
             return items.Select(MapToResponseDto).ToList();
         }
 
+        public async Task<PaginatedResult<ItemResponseDto>> GetAllItemsWithFilterAsync(ItemFilterAllDto filter)
+        {
+            var items = await _itemRepository.GetAllItemsWithFilterAsync(filter);
+            var totalCount = await _itemRepository.CountAllItemsWithFilterAsync(filter);
+
+            return new PaginatedResult<ItemResponseDto>
+            {
+                Data = items.Select(MapToResponseDto).ToList(),
+                TotalCount = totalCount,
+                Page = filter.Page,
+                PageSize = filter.PageSize
+            };
+        }
+
+        public async Task<bool> ApproveItemAsync(int id)
+        {
+            return await _itemRepository.UpdateItemStatusAsync(id, "approved");
+        }
+
+        public async Task<bool> RejectItemAsync(int id)
+        {
+            return await _itemRepository.UpdateItemStatusAsync(id, "rejected");
+        }
+
         private static ItemResponseDto MapToResponseDto(Item item)
         {
             // Lấy auction mới nhất hoặc đang active của item
