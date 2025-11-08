@@ -182,6 +182,16 @@ namespace BitNow_Backend.Controllers
             var exists = await _categoryService.SlugExistsAsync(slug, excludeId);
             return Ok(exists);
         }
+
+        /// <summary>
+        /// Check if category name exists
+        /// </summary>
+        [HttpGet("check-name/{name}")]
+        public async Task<ActionResult<bool>> CheckNameExists(string name, [FromQuery] int? excludeId = null)
+        {
+            var exists = await _categoryService.NameExistsAsync(name, excludeId);
+            return Ok(exists);
+        }
         [HttpGet("{id}/is-in-use")]
         public async Task<ActionResult> IsCategoryInUse(int id)
         {

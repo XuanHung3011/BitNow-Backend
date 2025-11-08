@@ -14,6 +14,7 @@ namespace BitNow_Backend.DAL.IRepositories
         Task<bool> DeleteAsync(int id);
         Task<bool> ExistsAsync(int id);
         Task<bool> SlugExistsAsync(string slug, int? excludeId = null);
+        Task<bool> NameExistsAsync(string name, int? excludeId = null);
         Task<bool> IsCategoryInUseAsync(int id);
     }
 }
