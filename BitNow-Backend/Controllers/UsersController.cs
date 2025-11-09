@@ -129,27 +129,6 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Delete user
-    /// </summary>
-    [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteUser(int id)
-    {
-        try
-        {
-            var result = await _userService.DeleteAsync(id);
-            if (!result)
-                return NotFound($"User with ID {id} not found");
-
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting user {UserId}", id);
-            return StatusCode(500, "Internal server error");
-        }
-    }
-
-    /// <summary>
     /// Change user password
     /// </summary>
     [HttpPut("{id}/change-password")]
