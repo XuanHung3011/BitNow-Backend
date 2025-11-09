@@ -19,7 +19,7 @@ namespace BitNow_Backend.DAL.Repositories
 				.Include(m => m.Sender)
 				.Include(m => m.Receiver)
 				.Include(m => m.Auction)
-					.ThenInclude(a => a != null ? a.Item : null!)
+					.ThenInclude(a => a!.Item)
 				.FirstOrDefaultAsync(m => m.Id == id);
 		}
 
@@ -29,30 +29,29 @@ namespace BitNow_Backend.DAL.Repositories
 				.Include(m => m.Sender)
 				.Include(m => m.Receiver)
 				.Include(m => m.Auction)
-					.ThenInclude(a => a != null ? a.Item : null!)
-				.Where(m => (m.SenderId == userId1 && m.ReceiverId == userId2) ||
-							(m.SenderId == userId2 && m.ReceiverId == userId1));
+					.ThenInclude(a => a!.Item)
+				.Where(m => 
+					((m.SenderId == userId1 && m.ReceiverId == userId2) ||
+					 (m.SenderId == userId2 && m.ReceiverId == userId1)) &&
+					(auctionId == null || m.AuctionId == auctionId))
+				.OrderBy(m => m.SentAt);
 
-			if (auctionId.HasValue)
-			{
-				query = query.Where(m => m.AuctionId == auctionId.Value);
-			}
-
-			return await query
-				.OrderBy(m => m.SentAt)
-				.ToListAsync();
+			return await query.ToListAsync();
 		}
 
-		public async Task<IEnumerable<Message>> GetMessagesByUserAsync(int userId)
+		public async Task<IEnumerable<Message>> GetConversationsAsync(int userId)
 		{
-			return await _context.Messages
+			// Lấy tất cả messages liên quan đến user, sau đó group theo conversation
+			var messages = await _context.Messages
 				.Include(m => m.Sender)
 				.Include(m => m.Receiver)
 				.Include(m => m.Auction)
-					.ThenInclude(a => a != null ? a.Item : null!)
+					.ThenInclude(a => a!.Item)
 				.Where(m => m.SenderId == userId || m.ReceiverId == userId)
 				.OrderByDescending(m => m.SentAt)
 				.ToListAsync();
+
+			return messages;
 		}
 
 		public async Task<IEnumerable<Message>> GetUnreadMessagesAsync(int userId)
@@ -61,17 +60,31 @@ namespace BitNow_Backend.DAL.Repositories
 				.Include(m => m.Sender)
 				.Include(m => m.Receiver)
 				.Include(m => m.Auction)
-					.ThenInclude(a => a != null ? a.Item : null!)
+					.ThenInclude(a => a!.Item)
 				.Where(m => m.ReceiverId == userId && (m.IsRead == null || m.IsRead == false))
 				.OrderByDescending(m => m.SentAt)
 				.ToListAsync();
 		}
 
-		public async Task<Message> AddAsync(Message entity)
+		public async Task<IEnumerable<Message>> GetAllMessagesByUserIdAsync(int userId)
 		{
-			_context.Messages.Add(entity);
+			return await _context.Messages
+				.Include(m => m.Sender)
+				.Include(m => m.Receiver)
+				.Include(m => m.Auction)
+					.ThenInclude(a => a!.Item)
+				.Where(m => m.SenderId == userId || m.ReceiverId == userId)
+				.OrderByDescending(m => m.SentAt)
+				.ToListAsync();
+		}
+
+		public async Task<Message> AddAsync(Message message)
+		{
+			message.SentAt = DateTime.UtcNow;
+			message.IsRead = false;
+			_context.Messages.Add(message);
 			await _context.SaveChangesAsync();
-			return entity;
+			return message;
 		}
 
 		public async Task<bool> MarkAsReadAsync(int messageId)
@@ -84,57 +97,10 @@ namespace BitNow_Backend.DAL.Repositories
 			return true;
 		}
 
-		public async Task<bool> MarkConversationAsReadAsync(int userId1, int userId2, int? auctionId = null)
-		{
-			var query = _context.Messages
-				.Where(m => m.ReceiverId == userId1 &&
-							m.SenderId == userId2 &&
-							(m.IsRead == null || m.IsRead == false));
-
-			if (auctionId.HasValue)
-			{
-				query = query.Where(m => m.AuctionId == auctionId.Value);
-			}
-
-			var messages = await query.ToListAsync();
-			foreach (var message in messages)
-			{
-				message.IsRead = true;
-			}
-
-			if (messages.Count > 0)
-			{
-				await _context.SaveChangesAsync();
-			}
-
-			return true;
-		}
-
 		public async Task<int> GetUnreadCountAsync(int userId)
 		{
 			return await _context.Messages
 				.CountAsync(m => m.ReceiverId == userId && (m.IsRead == null || m.IsRead == false));
-		}
-
-		public async Task<IEnumerable<Message>> GetConversationsAsync(int userId)
-		{
-			// Get the most recent message from each conversation
-			var conversations = await _context.Messages
-				.Include(m => m.Sender)
-				.Include(m => m.Receiver)
-				.Include(m => m.Auction)
-					.ThenInclude(a => a != null ? a.Item : null!)
-				.Where(m => m.SenderId == userId || m.ReceiverId == userId)
-				.GroupBy(m => new
-				{
-					OtherUserId = m.SenderId == userId ? m.ReceiverId : m.SenderId,
-					m.AuctionId
-				})
-				.Select(g => g.OrderByDescending(m => m.SentAt).First())
-				.OrderByDescending(m => m.SentAt)
-				.ToListAsync();
-
-			return conversations;
 		}
 	}
 }

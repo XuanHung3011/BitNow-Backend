@@ -8,18 +8,24 @@ namespace BitNow_Backend.BLL.Services
 	public class MessageService : IMessageService
 	{
 		private readonly IMessageRepository _messageRepository;
-		private readonly IUserService _userService;
+		private readonly IUserRepository _userRepository;
 
-		public MessageService(IMessageRepository messageRepository, IUserService userService)
+		public MessageService(IMessageRepository messageRepository, IUserRepository userRepository)
 		{
 			_messageRepository = messageRepository;
-			_userService = userService;
+			_userRepository = userRepository;
 		}
 
 		public async Task<MessageResponseDto?> SendMessageAsync(SendMessageRequest request)
 		{
-			if (string.IsNullOrWhiteSpace(request.Content))
-				throw new ArgumentException("Message content cannot be empty");
+			if (request.SenderId == request.ReceiverId)
+				throw new ArgumentException("Cannot send message to yourself");
+
+			var sender = await _userRepository.GetByIdAsync(request.SenderId);
+			var receiver = await _userRepository.GetByIdAsync(request.ReceiverId);
+
+			if (sender == null || receiver == null)
+				throw new ArgumentException("Sender or receiver not found");
 
 			var message = new Message
 			{
@@ -27,105 +33,62 @@ namespace BitNow_Backend.BLL.Services
 				ReceiverId = request.ReceiverId,
 				AuctionId = request.AuctionId,
 				Content = request.Content,
-				IsRead = false,
-				SentAt = DateTime.UtcNow
+				SentAt = DateTime.UtcNow,
+				IsRead = false
 			};
 
 			var savedMessage = await _messageRepository.AddAsync(message);
-			return await GetMessageByIdAsync(savedMessage.Id);
+			return await MapToMessageResponseDto(savedMessage);
 		}
 
-		public async Task<ConversationDto?> CreateConversationByEmailAsync(CreateConversationByEmailRequest request)
+		public async Task<IEnumerable<ConversationDto>> GetConversationsAsync(int userId)
 		{
-			// Find receiver by email
-			var receiver = await _userService.GetByEmailAsync(request.ReceiverEmail);
-			if (receiver == null)
-				throw new ArgumentException($"User with email {request.ReceiverEmail} not found");
-
-			if (receiver.Id == request.SenderId)
-				throw new ArgumentException("Cannot create conversation with yourself");
-
-			// If initial message is provided, send it
-			if (!string.IsNullOrWhiteSpace(request.InitialMessage))
-			{
-				var sendRequest = new SendMessageRequest
+			var messages = await _messageRepository.GetConversationsAsync(userId);
+			
+			// Group messages by conversation (other user + auction)
+			var conversations = messages
+				.GroupBy(m => new
 				{
-					SenderId = request.SenderId,
-					ReceiverId = receiver.Id,
-					AuctionId = request.AuctionId,
-					Content = request.InitialMessage
-				};
-				await SendMessageAsync(sendRequest);
-			}
+					OtherUserId = m.SenderId == userId ? m.ReceiverId : m.SenderId,
+					AuctionId = m.AuctionId
+				})
+				.Select(g =>
+				{
+					var lastMessage = g.OrderByDescending(m => m.SentAt).First();
+					var otherUserId = g.Key.OtherUserId;
+					var otherUser = lastMessage.SenderId == userId ? lastMessage.Receiver : lastMessage.Sender;
+					
+					return new ConversationDto
+					{
+						OtherUserId = otherUserId,
+						OtherUserName = otherUser?.FullName ?? "Unknown",
+						OtherUserAvatarUrl = otherUser?.AvatarUrl,
+						LastMessage = lastMessage.Content,
+						LastMessageTime = lastMessage.SentAt,
+						UnreadCount = g.Count(m => m.ReceiverId == userId && (m.IsRead == null || m.IsRead == false)),
+						AuctionId = g.Key.AuctionId,
+						AuctionTitle = lastMessage.Auction?.Item?.Title
+					};
+				})
+				.OrderByDescending(c => c.LastMessageTime)
+				.ToList();
 
-			// Check if conversation already exists by getting all conversations
-			var allConversations = await GetConversationsAsync(request.SenderId);
-			var existingConversation = allConversations.FirstOrDefault(c => 
-				c.OtherUserId == receiver.Id && c.AuctionId == request.AuctionId);
-
-			if (existingConversation != null)
-			{
-				// Return existing conversation
-				return existingConversation;
-			}
-
-			// Return new conversation (even if no messages yet)
-			return new ConversationDto
-			{
-				OtherUserId = receiver.Id,
-				OtherUserName = receiver.FullName,
-				OtherUserAvatarUrl = receiver.AvatarUrl,
-				LastMessage = request.InitialMessage,
-				LastMessageTime = string.IsNullOrWhiteSpace(request.InitialMessage) ? null : DateTime.UtcNow,
-				UnreadCount = 0,
-				AuctionId = request.AuctionId,
-				AuctionTitle = null
-			};
+			return conversations;
 		}
 
 		public async Task<IEnumerable<MessageResponseDto>> GetConversationAsync(int userId1, int userId2, int? auctionId = null)
 		{
 			var messages = await _messageRepository.GetConversationAsync(userId1, userId2, auctionId);
-			return messages.Select(MapToDto);
-		}
+			var result = new List<MessageResponseDto>();
 
-		public async Task<IEnumerable<ConversationDto>> GetConversationsAsync(int userId)
-		{
-			var conversations = await _messageRepository.GetConversationsAsync(userId);
-			var result = new List<ConversationDto>();
-
-			foreach (var message in conversations)
+			foreach (var message in messages)
 			{
-				var otherUser = message.SenderId == userId ? message.Receiver : message.Sender;
-				var otherUserId = message.SenderId == userId ? message.ReceiverId : message.SenderId;
-
-				// Get unread count for this conversation
-				var conversationMessages = await _messageRepository.GetConversationAsync(userId, otherUserId, message.AuctionId);
-				var unreadCount = conversationMessages.Count(m => m.ReceiverId == userId && (m.IsRead == null || m.IsRead == false));
-
-				// Get last message
-				var lastMessage = conversationMessages.OrderByDescending(m => m.SentAt).FirstOrDefault();
-
-				result.Add(new ConversationDto
-				{
-					OtherUserId = otherUserId,
-					OtherUserName = otherUser.FullName,
-					OtherUserAvatarUrl = otherUser.AvatarUrl,
-					LastMessage = lastMessage?.Content,
-					LastMessageTime = lastMessage?.SentAt,
-					UnreadCount = unreadCount,
-					AuctionId = message.AuctionId,
-					AuctionTitle = message.Auction?.Item?.Title
-				});
+				var dto = await MapToMessageResponseDto(message);
+				if (dto != null)
+					result.Add(dto);
 			}
 
 			return result;
-		}
-
-		public async Task<IEnumerable<MessageResponseDto>> GetUnreadMessagesAsync(int userId)
-		{
-			var messages = await _messageRepository.GetUnreadMessagesAsync(userId);
-			return messages.Select(MapToDto);
 		}
 
 		public async Task<bool> MarkAsReadAsync(int messageId)
@@ -133,33 +96,52 @@ namespace BitNow_Backend.BLL.Services
 			return await _messageRepository.MarkAsReadAsync(messageId);
 		}
 
-		public async Task<bool> MarkConversationAsReadAsync(int userId1, int userId2, int? auctionId = null)
+		public async Task<IEnumerable<MessageResponseDto>> GetUnreadMessagesAsync(int userId)
 		{
-			return await _messageRepository.MarkConversationAsReadAsync(userId1, userId2, auctionId);
+			var messages = await _messageRepository.GetUnreadMessagesAsync(userId);
+			var result = new List<MessageResponseDto>();
+
+			foreach (var message in messages)
+			{
+				var dto = await MapToMessageResponseDto(message);
+				if (dto != null)
+					result.Add(dto);
+			}
+
+			return result;
 		}
 
-		public async Task<int> GetUnreadCountAsync(int userId)
+		public async Task<IEnumerable<MessageResponseDto>> GetAllMessagesByUserIdAsync(int userId)
 		{
-			return await _messageRepository.GetUnreadCountAsync(userId);
+			var messages = await _messageRepository.GetAllMessagesByUserIdAsync(userId);
+			var result = new List<MessageResponseDto>();
+
+			foreach (var message in messages)
+			{
+				var dto = await MapToMessageResponseDto(message);
+				if (dto != null)
+					result.Add(dto);
+			}
+
+			return result;
 		}
 
-		public async Task<MessageResponseDto?> GetMessageByIdAsync(int messageId)
+		private async Task<MessageResponseDto?> MapToMessageResponseDto(Message message)
 		{
-			var message = await _messageRepository.GetByIdAsync(messageId);
-			return message == null ? null : MapToDto(message);
-		}
+			if (message == null) return null;
 
-		private static MessageResponseDto MapToDto(Message message)
-		{
+			var sender = await _userRepository.GetByIdAsync(message.SenderId);
+			var receiver = await _userRepository.GetByIdAsync(message.ReceiverId);
+
 			return new MessageResponseDto
 			{
 				Id = message.Id,
 				SenderId = message.SenderId,
-				SenderName = message.Sender.FullName,
-				SenderAvatarUrl = message.Sender.AvatarUrl,
+				SenderName = sender?.FullName ?? "Unknown",
+				SenderAvatarUrl = sender?.AvatarUrl,
 				ReceiverId = message.ReceiverId,
-				ReceiverName = message.Receiver.FullName,
-				ReceiverAvatarUrl = message.Receiver.AvatarUrl,
+				ReceiverName = receiver?.FullName ?? "Unknown",
+				ReceiverAvatarUrl = receiver?.AvatarUrl,
 				AuctionId = message.AuctionId,
 				AuctionTitle = message.Auction?.Item?.Title,
 				Content = message.Content,

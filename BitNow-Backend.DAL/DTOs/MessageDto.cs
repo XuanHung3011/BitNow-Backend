@@ -10,14 +10,6 @@ namespace BitNow_Backend.DAL.DTOs
 		public string Content { get; set; } = null!;
 	}
 
-	public class CreateConversationByEmailRequest
-	{
-		public int SenderId { get; set; }
-		public string ReceiverEmail { get; set; } = null!;
-		public int? AuctionId { get; set; }
-		public string? InitialMessage { get; set; }
-	}
-
 	public class MessageResponseDto
 	{
 		public int Id { get; set; }
