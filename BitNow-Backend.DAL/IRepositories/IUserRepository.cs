@@ -12,6 +12,8 @@ public interface IUserRepository
     Task UpdateAsync(User user);
     Task DeleteAsync(User user);
     Task<IEnumerable<User>> SearchAsync(string term, int page, int pageSize);
+    Task DeleteUserRoleAsync(UserRole userRole);
+    Task DeleteUserRolesAsync(List<UserRole> userRoles);
 }
 
 
