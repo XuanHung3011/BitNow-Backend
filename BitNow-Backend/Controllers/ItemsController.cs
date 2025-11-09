@@ -142,6 +142,30 @@ namespace BitNow_Backend.Controllers
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
+
+        /// <summary>
+        /// Get item by ID
+        /// </summary>
+        /// <param name="id">Item ID</param>
+        [HttpGet("{id}")]
+        public async Task<ActionResult<ItemResponseDto>> GetItemById(int id)
+        {
+            try
+            {
+                var item = await _itemService.GetByIdAsync(id);
+                if (item == null)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
+                return Ok(item);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting item {ItemId}", id);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
     }
 }
 

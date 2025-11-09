@@ -117,6 +117,16 @@ namespace BitNow_Backend.BLL.Services
             return await _itemRepository.UpdateItemStatusAsync(id, "rejected");
         }
 
+        public async Task<ItemResponseDto?> GetByIdAsync(int id)
+        {
+            var item = await _itemRepository.GetByIdAsync(id);
+            if (item == null)
+            {
+                return null;
+            }
+            return MapToResponseDto(item);
+        }
+
         private static ItemResponseDto MapToResponseDto(Item item)
         {
             // Lấy auction mới nhất hoặc đang active của item

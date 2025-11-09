@@ -29,5 +29,8 @@ namespace BitNow_Backend.BLL.IServices
         // Update item status
         Task<bool> ApproveItemAsync(int id);
         Task<bool> RejectItemAsync(int id);
+
+        // Get item by ID
+        Task<ItemResponseDto?> GetByIdAsync(int id);
     }
 }
