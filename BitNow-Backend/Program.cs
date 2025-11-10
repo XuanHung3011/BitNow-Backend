@@ -29,7 +29,10 @@ builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
 	builder.Services.AddScoped<IMessageService, MessageService>();
 	builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 
-	// Add services to the container.
+builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
+builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
+
+// Add services to the container.
 builder.Services.AddControllers();
 
 // Add CORS
@@ -57,6 +60,7 @@ if (app.Environment.IsDevelopment())
 
 // Use CORS early to handle preflight before any redirects
 app.UseCors("AllowAll");
+
 
 // Avoid redirecting preflight requests in development (causes CORS failure)
 if (!app.Environment.IsDevelopment())
