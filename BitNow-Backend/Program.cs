@@ -24,10 +24,12 @@ builder.Services.AddScoped<IWatchlistService, WatchlistService>();
 builder.Services.AddScoped<IWatchlistRepository, WatchlistRepository>();
 builder.Services.AddScoped<IAuctionService, AuctionService>();
 builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
-builder.Services.AddScoped<IItemService, ItemService>();
-builder.Services.AddScoped<IItemRepository, ItemRepository>();
+	builder.Services.AddScoped<IItemService, ItemService>();
+	builder.Services.AddScoped<IItemRepository, ItemRepository>();
+	builder.Services.AddScoped<IMessageService, MessageService>();
+	builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 
-// Add services to the container.
+	// Add services to the container.
 builder.Services.AddControllers();
 
 // Add CORS

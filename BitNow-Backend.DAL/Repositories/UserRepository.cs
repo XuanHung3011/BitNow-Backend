@@ -62,6 +62,18 @@ public class UserRepository : BitNow_Backend.DAL.IRepositories.IUserRepository
             .Take(pageSize)
             .ToListAsync();
     }
+
+    public async Task DeleteUserRoleAsync(UserRole userRole)
+    {
+        _context.UserRoles.Remove(userRole);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteUserRolesAsync(List<UserRole> userRoles)
+    {
+        _context.UserRoles.RemoveRange(userRoles);
+        await _context.SaveChangesAsync();
+    }
 }
 
 
