@@ -61,6 +61,7 @@ if (app.Environment.IsDevelopment())
 // Use CORS early to handle preflight before any redirects
 app.UseCors("AllowAll");
 
+
 // Avoid redirecting preflight requests in development (causes CORS failure)
 if (!app.Environment.IsDevelopment())
 {
