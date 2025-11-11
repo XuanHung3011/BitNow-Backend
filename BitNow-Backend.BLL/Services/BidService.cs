@@ -10,6 +10,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BitNow_Backend.BLL.Services
 {
+	/// <summary>
+	/// Service xử lý đặt giá và đọc lịch sử đấu giá.
+	/// Redis được dùng làm lớp cache:
+	///  - String key  : "auction:{id}:highest" lưu giá cao nhất hiện tại.
+	///  - Sorted set  : "auction:{id}:bids"   lưu tối đa 100 lượt đặt giá gần nhất (giá & thời gian).
+	/// Khi cache trống hoặc Redis không sẵn sàng, hệ thống tự động fallback về SQL.
+	/// </summary>
 	public class BidService : IBidService
 	{
 		private readonly BidNowDbContext _ctx;
@@ -63,11 +70,12 @@ namespace BitNow_Backend.BLL.Services
 			_ctx.Auctions.Update(auction);
 			await _ctx.SaveChangesAsync();
 
-			// Resolve bidder display name
+			// Lấy tên hiển thị của người đặt giá để cache kèm (giúp FE không phải gọi thêm API khác).
 			var bidderUser = await _ctx.Users.FirstOrDefaultAsync(u => u.Id == bidderId);
 			var bidderName = bidderUser?.FullName ?? $"User #{bidderId}";
 
-			// Update Redis structures
+			// Ghi vào Redis: vừa append lịch sử, vừa cập nhật giá cao nhất.
+			// Nếu Redis unavailable, khối này bị bỏ qua -> dữ liệu vẫn nằm trong SQL.
 			if (_redis is not null)
 			{
 				var db = _redis.GetDatabase();
@@ -78,16 +86,16 @@ namespace BitNow_Backend.BLL.Services
 					Amount = amount,
 					BidTime = bid.BidTime ?? DateTime.UtcNow
 				});
-				// Sorted set score by bid time ticks to preserve order; include amount in value
+				// Sorted set: score = ticks để đảm bảo trật tự thời gian tăng dần.
 				var ticks = (bid.BidTime ?? DateTime.UtcNow).Ticks;
 				_ = await db.SortedSetAddAsync(BidsKey(auctionId), bidJson, ticks);
-				// keep only last 100 (remove older)
+				// Giữ tối đa 100 bản ghi mới nhất, remove phần thừa phía đầu.
 				var length = await db.SortedSetLengthAsync(BidsKey(auctionId));
 				if (length > 100)
 				{
 					await db.SortedSetRemoveRangeByRankAsync(BidsKey(auctionId), 0, (long)(length - 101));
 				}
-				// Highest as a simple value
+				// Giá cao nhất được lưu dưới dạng string để truy xuất cực nhanh.
 				await db.StringSetAsync(HighestKey(auctionId), amount.ToString());
 			}
 
@@ -108,7 +116,7 @@ namespace BitNow_Backend.BLL.Services
 
 		public async Task<IReadOnlyList<BidDto>> GetRecentBidsAsync(int auctionId, int limit)
 		{
-			// Try Redis first
+			// Ưu tiên đọc từ Redis (cache nóng) để tránh query SQL liên tục.
 			if (_redis is not null)
 			{
 				var db = _redis.GetDatabase();
@@ -129,7 +137,7 @@ namespace BitNow_Backend.BLL.Services
 						.ToList()!;
 				}
 			}
-			// Fallback DB
+			// Cache trống hoặc Redis không sẵn sàng => fallback đọc trực tiếp từ SQL.
 			var list = await _bidRepository.GetRecentByAuctionAsync(auctionId, limit);
 			return list.Select(b => new BidDto
 			{

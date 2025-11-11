@@ -22,6 +22,7 @@ namespace BitNow_Backend.DAL.Repositories
 
 		public async Task<IReadOnlyList<Bid>> GetRecentByAuctionAsync(int auctionId, int limit)
 		{
+			// Include(b => b.Bidder) để khi Redis cache trống, service vẫn có tên full của người đặt giá.
 			return await _ctx.Bids
 				.Include(b => b.Bidder)
 				.Where(b => b.AuctionId == auctionId)
