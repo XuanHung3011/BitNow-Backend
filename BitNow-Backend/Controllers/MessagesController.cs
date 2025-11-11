@@ -1,6 +1,7 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace BitNow_Backend.Controllers
 {
@@ -10,11 +11,13 @@ namespace BitNow_Backend.Controllers
 	{
 		private readonly IMessageService _messageService;
 		private readonly ILogger<MessagesController> _logger;
+		private readonly IHubContext<BitNow_Backend.RealTime.MessageHub> _hubContext;
 
-		public MessagesController(IMessageService messageService, ILogger<MessagesController> logger)
+		public MessagesController(IMessageService messageService, ILogger<MessagesController> logger, IHubContext<BitNow_Backend.RealTime.MessageHub> hubContext)
 		{
 			_messageService = messageService;
 			_logger = logger;
+			_hubContext = hubContext;
 		}
 
 		/// <summary>
@@ -31,6 +34,12 @@ namespace BitNow_Backend.Controllers
 				var message = await _messageService.SendMessageAsync(request);
 				if (message == null)
 					return BadRequest("Failed to send message");
+
+				// Broadcasting realtime to both sender and receiver groups
+				await _hubContext.Clients.Group($"user-{message.SenderId}")
+					.SendAsync("MessageReceived", message);
+				await _hubContext.Clients.Group($"user-{message.ReceiverId}")
+					.SendAsync("MessageReceived", message);
 
 				return Ok(message);
 			}
