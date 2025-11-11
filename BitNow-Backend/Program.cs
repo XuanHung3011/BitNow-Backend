@@ -100,6 +100,7 @@ app.UseAuthorization();
 app.MapControllers();
 // SignalR hubs
 app.MapHub<BitNow_Backend.RealTime.AuctionHub>("/hubs/auction");
+app.MapHub<BitNow_Backend.RealTime.MessageHub>("/hubs/messages");
 
 // Seed admin from configuration
 using (var scope = app.Services.CreateScope())
