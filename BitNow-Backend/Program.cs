@@ -37,6 +37,8 @@ builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
 // Bids
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IBidService, BidService>();
+// Admin Stats
+builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
 
 // Add services to the container.
 builder.Services.AddControllers();
