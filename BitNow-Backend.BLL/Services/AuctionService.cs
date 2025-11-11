@@ -1,6 +1,8 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
+using System;
+using System.Linq;
 
 namespace BitNow_Backend.BLL.Services
 {
@@ -36,6 +38,67 @@ namespace BitNow_Backend.BLL.Services
 				EndTime = a.EndTime,
 				Status = a.Status,
 				BidCount = a.BidCount
+			};
+		}
+
+		public async Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
+		{
+			var (auctions, totalCount) = await _auctionRepository.GetAuctionsWithFilterAsync(filter);
+			var now = DateTime.UtcNow;
+
+			var items = auctions.Select(a =>
+			{
+				// Determine display status
+				string displayStatus;
+				if (a.Status != null && a.Status.ToLower() == "suspended")
+				{
+					displayStatus = "suspended";
+				}
+				else if (a.Status != null && a.Status.ToLower() == "active")
+				{
+					if (a.StartTime > now)
+					{
+						displayStatus = "scheduled";
+					}
+					else if (a.EndTime > now)
+					{
+						displayStatus = "active";
+					}
+					else
+					{
+						displayStatus = "completed";
+					}
+				}
+				else if (a.EndTime < now || (a.Status != null && a.Status.ToLower() == "completed"))
+				{
+					displayStatus = "completed";
+				}
+				else
+				{
+					displayStatus = a.Status?.ToLower() ?? "unknown";
+				}
+
+				return new AuctionListItemDto
+				{
+					Id = a.Id,
+					ItemTitle = a.Item?.Title ?? "",
+					SellerName = a.Seller?.FullName,
+					CategoryName = a.Item?.Category?.Name,
+					StartingBid = a.StartingBid,
+					CurrentBid = a.CurrentBid,
+					EndTime = a.EndTime,
+					Status = a.Status ?? "",
+					DisplayStatus = displayStatus,
+					BidCount = a.BidCount ?? 0
+				};
+			}).ToList();
+
+			return new PaginatedResult<AuctionListItemDto>
+			{
+				Data = items,
+				TotalCount = totalCount,
+				Page = filter.Page,
+				PageSize = filter.PageSize
 			};
 		}
 	}
