@@ -39,6 +39,8 @@ builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IBidService, BidService>();
 // Admin Stats
 builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
+// Platform Analytics
+builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
 // Add services to the container.
 builder.Services.AddControllers();
