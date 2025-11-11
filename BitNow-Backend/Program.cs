@@ -4,6 +4,9 @@ using BitNow_Backend.BLL.Services;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
+using StackExchange.Redis;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -31,9 +34,33 @@ builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
+// Bids
+builder.Services.AddScoped<IBidRepository, BidRepository>();
+builder.Services.AddScoped<IBidService, BidService>();
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// SignalR
+builder.Services.AddSignalR();
+
+// Redis (cache + pub/sub if needed)
+var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+	try
+	{
+		var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+		options.AbortOnConnectFail = false; // allow startup even if redis not ready
+		var mux = ConnectionMultiplexer.Connect(options);
+		builder.Services.AddSingleton<IConnectionMultiplexer>(mux);
+		builder.Services.AddStackExchangeRedisCache(cfg => { cfg.Configuration = redisConnectionString; });
+	}
+	catch
+	{
+		// If Redis is unavailable, continue without registering it
+	}
+}
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -71,6 +98,8 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthorization();
 
 app.MapControllers();
+// SignalR hubs
+app.MapHub<BitNow_Backend.RealTime.AuctionHub>("/hubs/auction");
 
 // Seed admin from configuration
 using (var scope = app.Services.CreateScope())
