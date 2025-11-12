@@ -59,11 +59,34 @@ namespace BitNow_Backend.DAL.DTOs
         public List<string>? AuctionStatuses { get; set; }  // active, ending-soon, pending
         public string? Condition { get; set; }
     }
+
+    public class ItemFilterAllDto
+    {
+        public List<string>? Statuses { get; set; }  // 'pending', 'approved', 'rejected', 'archived'
+        public int? CategoryId { get; set; }  // Filter theo category
+        public string? SortBy { get; set; } = "CreatedAt";  // Title, BasePrice, CreatedAt
+        public string? SortOrder { get; set; } = "desc";  // asc, desc
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+    }
     public class CategoryDto
     {
         public int Id { get; set; }
         public string? Name { get; set; }
         public string? Slug { get; set; }
         public string? Icon { get; set; }
+    }
+
+
+    public class CreateItemDto
+    {
+        public int SellerId { get; set; }
+        public int CategoryId { get; set; }
+        public string Title { get; set; } = null!;
+        public string? Description { get; set; }
+        public string? Condition { get; set; }
+        public string? Location { get; set; }
+        public decimal BasePrice { get; set; }
+        // Images will be handled separately as IFormFile
     }
 }
