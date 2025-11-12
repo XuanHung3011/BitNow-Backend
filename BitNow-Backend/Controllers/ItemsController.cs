@@ -1,182 +1,171 @@
-﻿using BitNow_Backend.DAL.IRepositories;
-using BitNow_Backend.DAL.Models;
-using BitNow_Backend.DAL.DTOs; 
+using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace BitNow_Backend.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class ItemsController : ControllerBase
     {
-        private readonly IItemRepository _itemRepository;
-        private const int DefaultPageSize = 10;
+        private readonly IItemService _itemService;
+        private readonly ILogger<ItemsController> _logger;
 
-        public ItemsController(IItemRepository itemRepository)
+        public ItemsController(IItemService itemService, ILogger<ItemsController> logger)
         {
-            _itemRepository = itemRepository;
+            _itemService = itemService;
+            _logger = logger;
         }
 
-        private ItemResponseDto MapToItemDto(Item item)
-        {
-            var activeAuction = item.Auctions?.OrderByDescending(a => a.EndTime).FirstOrDefault();
-
-            return new ItemResponseDto
-            {
-                Id = item.Id,
-                Title = item.Title,
-                Description = item.Description,
-                BasePrice = item.BasePrice,
-                Condition = item.Condition,
-                Location = item.Location,
-                Status = item.Status,
-                CreatedAt = item.CreatedAt,
-                Images = item.Images,
-
-                CategoryId = item.Category?.Id ?? item.CategoryId,
-                CategoryName = item.Category?.Name,
-                CategorySlug = item.Category?.Slug,
-                CategoryIcon = item.Category?.Icon,
-
-                SellerId = item.Seller?.Id ?? item.SellerId,
-                SellerName = item.Seller?.FullName,
-                SellerEmail = item.Seller?.Email,
-                SellerAvatar = item.Seller?.AvatarUrl,
-                SellerReputationScore = item.Seller?.ReputationScore,
-                SellerTotalSales = item.Seller?.TotalSales,
-
-                AuctionId = activeAuction?.Id,
-                StartingBid = activeAuction?.StartingBid,
-                CurrentBid = activeAuction?.CurrentBid,
-                BidCount = activeAuction?.BidCount,
-                AuctionEndTime = activeAuction?.EndTime,
-                AuctionStatus = activeAuction?.Status
-            };
-        }
-
+        /// <summary>
+        /// Get all items with pagination, filtering by status and category, and sorting
+        /// </summary>
+        /// <param name="statuses">Filter by status: 'pending', 'approved', 'rejected', 'archived' (comma-separated for multiple)</param>
+        /// <param name="categoryId">Filter by category ID</param>
+        /// <param name="sortBy">Sort by: 'Title', 'BasePrice', 'CreatedAt' (default: 'CreatedAt')</param>
+        /// <param name="sortOrder">Sort order: 'asc' or 'desc' (default: 'desc')</param>
+        /// <param name="page">Page number (default: 1)</param>
+        /// <param name="pageSize">Page size (default: 10, max: 100)</param>
         [HttpGet]
-        [ProducesResponseType(200)]
-        public async Task<IActionResult> GetItems([FromQuery] int page = 1, [FromQuery] int pageSize = DefaultPageSize)
+        public async Task<ActionResult<PaginatedResult<ItemResponseDto>>> GetAllItems(
+            [FromQuery] string? statuses = null,
+            [FromQuery] int? categoryId = null,
+            [FromQuery] string? sortBy = "CreatedAt",
+            [FromQuery] string? sortOrder = "desc",
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
-            if (page < 1) return BadRequest("Page number must be 1 or greater.");
-            if (pageSize < 1) pageSize = DefaultPageSize;
-
-            var items = await _itemRepository.GetPagedAsync(page, pageSize);
-            var totalCount = await _itemRepository.CountAsync();
-            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-
-            var itemDtos = items.Select(MapToItemDto).ToList();
-
-            return Ok(new
-            {
-                TotalItems = totalCount,
-                TotalPages = totalPages,
-                CurrentPage = page,
-                PageSize = pageSize,
-                Data = itemDtos 
-            });
-        }
-
-        [HttpGet("{id}")]
-        [ProducesResponseType(200)]
-        [ProducesResponseType(404)]
-        public async Task<IActionResult> GetItem(int id)
-        {
-            var item = await _itemRepository.GetByIdAsync(id);
-
-            if (item == null)
-            {
-                return NotFound($"Item with ID {id} not found.");
-            }
-
-            var itemDto = MapToItemDto(item);
-            return Ok(itemDto);
-        }
-
-        [HttpGet("BySeller/{sellerId}")]
-        [ProducesResponseType(200)]
-        [ProducesResponseType(400)]
-        public async Task<IActionResult> GetItemsBySeller(int sellerId, [FromQuery] int page = 1, [FromQuery] int pageSize = DefaultPageSize)
-        {
-            if (sellerId <= 0) return BadRequest("Invalid Seller ID.");
-            if (page < 1) return BadRequest("Page number must be 1 or greater.");
-            if (pageSize < 1) pageSize = DefaultPageSize;
-
-            var items = await _itemRepository.GetBySellerIdAsync(sellerId, page, pageSize);
-            var totalCount = await _itemRepository.CountBySellerIdAsync(sellerId);
-            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-
-            var itemDtos = items.Select(MapToItemDto).ToList();
-
-            return Ok(new
-            {
-                SellerId = sellerId,
-                TotalItems = totalCount,
-                TotalPages = totalPages,
-                CurrentPage = page,
-                PageSize = pageSize,
-                Data = itemDtos 
-            });
-        }
-
-
-
-        [HttpPost]
-        [ProducesResponseType(201)] 
-        [ProducesResponseType(400)] 
-        public async Task<IActionResult> CreateItem([FromBody] CreateItemRequestDto requestDto)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            var newItem = new Item
-            {
-                Title = requestDto.Title,
-                Description = requestDto.Description,
-                CategoryId = requestDto.CategoryId,
-                BasePrice = requestDto.BasePrice,
-                Condition = requestDto.Condition,
-                Location = requestDto.Location,
-                Images = requestDto.Images,
-                SellerId = requestDto.SellerId,
-                Status = "pending", 
-                CreatedAt = DateTime.UtcNow 
-            };
-
-            var newAuction = new Auction
-            {
-                SellerId = requestDto.SellerId,
-                StartingBid = requestDto.StartingBid,
-                CurrentBid = requestDto.StartingBid, 
-                BuyNowPrice = requestDto.BuyNowPrice,
-                StartTime = DateTime.UtcNow,
-                EndTime = requestDto.EndTime,
-                Status = "active", 
-                BidCount = 0,
-                CreatedAt = DateTime.UtcNow
-            };
-
             try
             {
-                var createdItem = await _itemRepository.AddAsync(newItem, newAuction);
+                // Validate parameters
+                if (page < 1) page = 1;
+                if (pageSize < 1 || pageSize > 100) pageSize = 10;
+                if (string.IsNullOrEmpty(sortBy)) sortBy = "CreatedAt";
+                if (string.IsNullOrEmpty(sortOrder)) sortOrder = "desc";
 
-                var itemDto = MapToItemDto(createdItem);
+                // Validate sortBy values
+                var validSortBy = new[] { "Title", "BasePrice", "CreatedAt" };
+                if (!validSortBy.Contains(sortBy, StringComparer.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { message = $"sortBy must be one of: {string.Join(", ", validSortBy)}" });
+                }
 
-                return CreatedAtAction(nameof(GetItem), new { id = itemDto.Id }, itemDto);
-            }
-            catch (DbUpdateException ex)
-            {
-                return BadRequest("Database error occurred: " + ex.InnerException?.Message);
+                // Validate sortOrder values
+                if (!string.Equals(sortOrder, "asc", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { message = "sortOrder must be 'asc' or 'desc'" });
+                }
+
+                // Parse statuses from comma-separated string
+                List<string>? statusList = null;
+                if (!string.IsNullOrWhiteSpace(statuses))
+                {
+                    statusList = statuses.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .ToList();
+
+                    // Validate status values
+                    var validStatuses = new[] { "pending", "approved", "rejected", "archived" };
+                    var invalidStatuses = statusList.Where(s => !validStatuses.Contains(s, StringComparer.OrdinalIgnoreCase)).ToList();
+                    if (invalidStatuses.Any())
+                    {
+                        return BadRequest(new { message = $"Invalid status values: {string.Join(", ", invalidStatuses)}. Valid values are: {string.Join(", ", validStatuses)}" });
+                    }
+                }
+
+                var filter = new ItemFilterAllDto
+                {
+                    Statuses = statusList,
+                    CategoryId = categoryId,
+                    SortBy = sortBy,
+                    SortOrder = sortOrder,
+                    Page = page,
+                    PageSize = pageSize
+                };
+
+                var result = await _itemService.GetAllItemsWithFilterAsync(filter);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Internal server error: " + ex.Message);
+                _logger.LogError(ex, "Error getting all items");
+                return StatusCode(500, new { message = "Internal server error" });
             }
         }
 
+        /// <summary>
+        /// Approve an item (change status to 'approved')
+        /// </summary>
+        /// <param name="id">Item ID</param>
+        [HttpPut("{id}/approve")]
+        public async Task<ActionResult> ApproveItem(int id)
+        {
+            try
+            {
+                var result = await _itemService.ApproveItemAsync(id);
+                if (!result)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
 
+                return Ok(new { message = "Item approved successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error approving item {ItemId}", id);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        /// <summary>
+        /// Reject an item (change status to 'rejected')
+        /// </summary>
+        /// <param name="id">Item ID</param>
+        [HttpPut("{id}/reject")]
+        public async Task<ActionResult> RejectItem(int id)
+        {
+            try
+            {
+                var result = await _itemService.RejectItemAsync(id);
+                if (!result)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
+                return Ok(new { message = "Item rejected successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error rejecting item {ItemId}", id);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        /// <summary>
+        /// Get item by ID
+        /// </summary>
+        /// <param name="id">Item ID</param>
+        [HttpGet("{id}")]
+        public async Task<ActionResult<ItemResponseDto>> GetItemById(int id)
+        {
+            try
+            {
+                var item = await _itemService.GetByIdAsync(id);
+                if (item == null)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
+                return Ok(item);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting item {ItemId}", id);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
     }
 }
+

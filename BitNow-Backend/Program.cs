@@ -4,6 +4,9 @@ using BitNow_Backend.BLL.Services;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
+using StackExchange.Redis;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -18,21 +21,50 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailVerificationRepository, EmailVerificationRepository>();
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<IRatingService, RatingService>();
-builder.Services.AddScoped<IRatingRepository, RatingRepository>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IWatchlistService, WatchlistService>();
 builder.Services.AddScoped<IWatchlistRepository, WatchlistRepository>();
 builder.Services.AddScoped<IAuctionService, AuctionService>();
 builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
-builder.Services.AddScoped<IItemService, ItemService>();
-builder.Services.AddScoped<IItemRepository, ItemRepository>();
+	builder.Services.AddScoped<IItemService, ItemService>();
+	builder.Services.AddScoped<IItemRepository, ItemRepository>();
+	builder.Services.AddScoped<IMessageService, MessageService>();
+	builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 
-// duplicate registration removed after merge
+builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
+builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
+// Bids
+builder.Services.AddScoped<IBidRepository, BidRepository>();
+builder.Services.AddScoped<IBidService, BidService>();
+// Admin Stats
+builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
+// Platform Analytics
+builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// SignalR
+builder.Services.AddSignalR();
+
+// Redis (cache + pub/sub if needed)
+var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+	try
+	{
+		var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+		options.AbortOnConnectFail = false; // allow startup even if redis not ready
+		var mux = ConnectionMultiplexer.Connect(options);
+		builder.Services.AddSingleton<IConnectionMultiplexer>(mux);
+		builder.Services.AddStackExchangeRedisCache(cfg => { cfg.Configuration = redisConnectionString; });
+	}
+	catch
+	{
+		// If Redis is unavailable, continue without registering it
+	}
+}
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -60,6 +92,7 @@ if (app.Environment.IsDevelopment())
 // Use CORS early to handle preflight before any redirects
 app.UseCors("AllowAll");
 
+
 // Avoid redirecting preflight requests in development (causes CORS failure)
 if (!app.Environment.IsDevelopment())
 {
@@ -69,6 +102,9 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthorization();
 
 app.MapControllers();
+// SignalR hubs
+app.MapHub<BitNow_Backend.RealTime.AuctionHub>("/hubs/auction");
+app.MapHub<BitNow_Backend.RealTime.MessageHub>("/hubs/messages");
 
 // Seed admin from configuration
 using (var scope = app.Services.CreateScope())

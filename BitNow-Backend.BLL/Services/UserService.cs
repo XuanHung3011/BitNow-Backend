@@ -112,11 +112,18 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
 
     /// <summary>
     /// Xoá người dùng theo Id. Trả về true nếu thành công.
+    /// Xóa các UserRoles trước khi xóa User để tránh foreign key constraint violation.
     /// </summary>
     public async Task<bool> DeleteAsync(int id)
     {
         var user = await _userRepository.GetByIdAsync(id);
         if (user == null) return false;
+
+        // Delete user roles first to avoid foreign key constraint issues
+        if (user.UserRoles != null && user.UserRoles.Any())
+        {
+            await _userRepository.DeleteUserRolesAsync(user.UserRoles.ToList());
+        }
 
         await _userRepository.DeleteAsync(user);
         return true;
@@ -237,10 +244,10 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         if (user == null) return false;
 
         var toRemove = user.UserRoles.FirstOrDefault(r => r.Role == role);
-        if (toRemove == null) return true;
+        if (toRemove == null) return true; // Role doesn't exist, consider it already removed
 
-        user.UserRoles.Remove(toRemove);
-        await _userRepository.UpdateAsync(user);
+        // Delete the UserRole entity directly from the repository
+        await _userRepository.DeleteUserRoleAsync(toRemove);
         return true;
     }
 }

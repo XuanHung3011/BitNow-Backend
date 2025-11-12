@@ -332,5 +332,110 @@ namespace BitNow_Backend.DAL.Repositories
                 .Take(limit)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Item>> GetAllItemsWithFilterAsync(ItemFilterAllDto filter)
+        {
+            if (filter.Page <= 0) filter.Page = 1;
+            if (filter.PageSize <= 0) filter.PageSize = 10;
+            if (filter.PageSize > 100) filter.PageSize = 100;
+
+            var query = _context.Items
+                .Include(i => i.Category)
+                .Include(i => i.Seller)
+                .Include(i => i.Auctions)
+                .AsQueryable();
+
+            // Filter by status
+            if (filter.Statuses != null && filter.Statuses.Any())
+            {
+                var normalizedStatuses = filter.Statuses
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.ToLower().Trim())
+                    .ToList();
+
+                if (normalizedStatuses.Any())
+                {
+                    query = query.Where(i => i.Status != null && normalizedStatuses.Contains(i.Status.ToLower()));
+                }
+            }
+
+            // Filter by category
+            if (filter.CategoryId.HasValue && filter.CategoryId.Value > 0)
+            {
+                query = query.Where(i => i.CategoryId == filter.CategoryId.Value);
+            }
+
+            // Sorting
+            var sortBy = (filter.SortBy ?? "CreatedAt").ToLower();
+            var sortOrder = (filter.SortOrder ?? "desc").ToLower();
+
+            switch (sortBy)
+            {
+                case "title":
+                    query = sortOrder == "asc" 
+                        ? query.OrderBy(i => i.Title) 
+                        : query.OrderByDescending(i => i.Title);
+                    break;
+                case "baseprice":
+                    query = sortOrder == "asc" 
+                        ? query.OrderBy(i => i.BasePrice) 
+                        : query.OrderByDescending(i => i.BasePrice);
+                    break;
+                case "createdat":
+                default:
+                    query = sortOrder == "asc" 
+                        ? query.OrderBy(i => i.CreatedAt) 
+                        : query.OrderByDescending(i => i.CreatedAt);
+                    break;
+            }
+
+            // Pagination
+            var result = await query
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return result;
+        }
+
+        public async Task<int> CountAllItemsWithFilterAsync(ItemFilterAllDto filter)
+        {
+            var query = _context.Items.AsQueryable();
+
+            // Filter by status
+            if (filter.Statuses != null && filter.Statuses.Any())
+            {
+                var normalizedStatuses = filter.Statuses
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.ToLower().Trim())
+                    .ToList();
+
+                if (normalizedStatuses.Any())
+                {
+                    query = query.Where(i => i.Status != null && normalizedStatuses.Contains(i.Status.ToLower()));
+                }
+            }
+
+            // Filter by category
+            if (filter.CategoryId.HasValue && filter.CategoryId.Value > 0)
+            {
+                query = query.Where(i => i.CategoryId == filter.CategoryId.Value);
+            }
+
+            return await query.CountAsync();
+        }
+
+        public async Task<bool> UpdateItemStatusAsync(int id, string status)
+        {
+            var item = await _context.Items.FindAsync(id);
+            if (item == null)
+            {
+                return false;
+            }
+
+            item.Status = status;
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

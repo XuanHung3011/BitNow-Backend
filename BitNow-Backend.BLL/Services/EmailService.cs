@@ -24,8 +24,15 @@ public class EmailService : IEmailService
     {
         try
         {
+            var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("Email:FromEmail not configured");
+            var fromName = _configuration["Email:FromName"] ?? "BidNow";
+            var smtpServer = _configuration["Email:SmtpServer"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var username = _configuration["Email:Username"] ?? throw new InvalidOperationException("Email:Username not configured");
+            var password = _configuration["Email:Password"] ?? throw new InvalidOperationException("Email:Password not configured");
+
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("BidNow", "xuanhungdz3011@gmail.com"));
+            message.From.Add(new MailboxAddress(fromName, fromEmail));
             message.To.Add(new MailboxAddress(userName, toEmail));
             message.Subject = "Xác minh tài khoản BidNow";
 
@@ -74,8 +81,8 @@ public class EmailService : IEmailService
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();
-            await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync("xuanhungdz3011@gmail.com", "ayvcnronaaibkssw");
+            await client.ConnectAsync(smtpServer, smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(username, password);
             await client.SendAsync(message);
             await client.DisconnectAsync(true);
 
@@ -95,8 +102,15 @@ public class EmailService : IEmailService
     {
         try
         {
+            var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("Email:FromEmail not configured");
+            var fromName = _configuration["Email:FromName"] ?? "BidNow";
+            var smtpServer = _configuration["Email:SmtpServer"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var username = _configuration["Email:Username"] ?? throw new InvalidOperationException("Email:Username not configured");
+            var password = _configuration["Email:Password"] ?? throw new InvalidOperationException("Email:Password not configured");
+
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("BidNow", "xuanhungdz3011@gmail.com"));
+            message.From.Add(new MailboxAddress(fromName, fromEmail));
             message.To.Add(new MailboxAddress(userName, toEmail));
             message.Subject = "Đặt lại mật khẩu BidNow";
 
@@ -118,8 +132,8 @@ public class EmailService : IEmailService
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();
-            await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync("xuanhungdz3011@gmail.com", "ayvcnronaaibkssw");
+            await client.ConnectAsync(smtpServer, smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(username, password);
             await client.SendAsync(message);
             await client.DisconnectAsync(true);
 
