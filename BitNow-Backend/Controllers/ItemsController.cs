@@ -1,6 +1,9 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using BitNow_Backend.Services;
+using System;
+using System.Linq;
 
 namespace BitNow_Backend.Controllers
 {
@@ -10,12 +13,104 @@ namespace BitNow_Backend.Controllers
     {
         private readonly IItemService _itemService;
         private readonly ILogger<ItemsController> _logger;
+        private readonly IFileUploadService _fileUploadService;
 
-        public ItemsController(IItemService itemService, ILogger<ItemsController> logger)
+        public ItemsController(IItemService itemService, IFileUploadService fileUploadService, ILogger<ItemsController> logger)
         {
             _itemService = itemService;
+            _fileUploadService = fileUploadService;
             _logger = logger;
         }
+
+        /// <summary>
+        /// Create a new item (status will be 'pending' for admin approval)
+        /// </summary>
+        [HttpPost]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<ItemResponseDto>> CreateItem()
+        {
+            try
+            {
+                // Manually read from Form to handle model binding issues
+                var form = await Request.ReadFormAsync();
+
+                // Parse CreateItemDto from form
+                if (!int.TryParse(form["SellerId"].ToString(), out int sellerId) || sellerId <= 0)
+                {
+                    return BadRequest(new { message = "SellerId is required and must be greater than 0" });
+                }
+
+                if (!int.TryParse(form["CategoryId"].ToString(), out int categoryId) || categoryId <= 0)
+                {
+                    return BadRequest(new { message = "CategoryId is required and must be greater than 0" });
+                }
+
+                var title = form["Title"].ToString();
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return BadRequest(new { message = "Title is required" });
+                }
+
+                if (!decimal.TryParse(form["BasePrice"].ToString(), out decimal basePrice) || basePrice <= 0)
+                {
+                    return BadRequest(new { message = "BasePrice must be greater than 0" });
+                }
+
+                var dto = new CreateItemDto
+                {
+                    SellerId = sellerId,
+                    CategoryId = categoryId,
+                    Title = title,
+                    Description = form["Description"].ToString(),
+                    Condition = form["Condition"].ToString(),
+                    Location = form["Location"].ToString(),
+                    BasePrice = basePrice
+                };
+
+                _logger.LogInformation("CreateItem called with sellerId: {SellerId}, title: {Title}", dto.SellerId, dto.Title);
+
+                // Get image files
+                var images = form.Files.Where(f => f.Name == "images").ToList();
+
+                // Handle image uploads
+                string? imagesPath = null;
+                if (images != null && images.Count > 0)
+                {
+                    try
+                    {
+                        var savedPaths = await _fileUploadService.SaveImagesAsync(images, "items");
+                        imagesPath = string.Join(",", savedPaths);
+                        _logger.LogInformation("Saved {Count} images for item", savedPaths.Count);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error saving images");
+                        return BadRequest(new { message = $"Error saving images: {ex.Message}" });
+                    }
+                }
+
+                var result = await _itemService.CreateItemAsync(dto, imagesPath);
+                if (result == null)
+                {
+                    _logger.LogWarning("CreateItemAsync returned null");
+                    return BadRequest(new { message = "Failed to create item" });
+                }
+
+                _logger.LogInformation("Item created successfully with ID: {ItemId}", result.Id);
+                return Ok(result); // Use Ok instead of CreatedAtAction to ensure response is returned
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument when creating item");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating item");
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
 
         /// <summary>
         /// Get all items with pagination, filtering by status and category, and sorting
