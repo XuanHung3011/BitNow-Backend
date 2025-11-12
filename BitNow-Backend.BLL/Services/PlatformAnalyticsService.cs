@@ -223,5 +223,168 @@ public class PlatformAnalyticsService : IPlatformAnalyticsService
             }
         };
     }
+
+    public async Task<PlatformAnalyticsDetailDto> GetAnalyticsDetailAsync(string type)
+    {
+        var now = DateTime.UtcNow;
+        var chartData = new List<ChartDataPoint>();
+        var summary = new Dictionary<string, object>();
+
+        switch (type.ToLower())
+        {
+            case "newusers":
+                // Get new users data for last 12 weeks
+                for (int i = 11; i >= 0; i--)
+                {
+                    var weekStart = now.AddDays(-(i * 7)).Date;
+                    var weekEnd = weekStart.AddDays(7);
+                    var count = await _context.Users
+                        .Where(u => u.CreatedAt >= weekStart && u.CreatedAt < weekEnd)
+                        .CountAsync();
+                    
+                    chartData.Add(new ChartDataPoint
+                    {
+                        Name = $"Tuần {12 - i}",
+                        Value = count
+                    });
+                }
+                
+                // Summary
+                var newUsersThisMonth = await _context.Users
+                    .Where(u => u.CreatedAt >= new DateTime(now.Year, now.Month, 1))
+                    .CountAsync();
+                var newUsersLastMonth = await _context.Users
+                    .Where(u => u.CreatedAt >= new DateTime(now.Year, now.Month, 1).AddMonths(-1) && 
+                        u.CreatedAt < new DateTime(now.Year, now.Month, 1))
+                    .CountAsync();
+                var totalUsers = await _context.Users.CountAsync();
+                
+                summary["Người dùng mới tháng này"] = newUsersThisMonth;
+                summary["Người dùng mới tháng trước"] = newUsersLastMonth;
+                summary["Tổng người dùng"] = totalUsers;
+                break;
+
+            case "newauctions":
+                // Get new auctions data for last 12 weeks
+                for (int i = 11; i >= 0; i--)
+                {
+                    var weekStart = now.AddDays(-(i * 7)).Date;
+                    var weekEnd = weekStart.AddDays(7);
+                    var count = await _context.Auctions
+                        .Where(a => a.CreatedAt >= weekStart && a.CreatedAt < weekEnd)
+                        .CountAsync();
+                    
+                    chartData.Add(new ChartDataPoint
+                    {
+                        Name = $"Tuần {12 - i}",
+                        Value = count
+                    });
+                }
+                
+                // Summary
+                var newAuctionsThisMonth = await _context.Auctions
+                    .Where(a => a.CreatedAt >= new DateTime(now.Year, now.Month, 1))
+                    .CountAsync();
+                var newAuctionsLastMonth = await _context.Auctions
+                    .Where(a => a.CreatedAt >= new DateTime(now.Year, now.Month, 1).AddMonths(-1) && 
+                        a.CreatedAt < new DateTime(now.Year, now.Month, 1))
+                    .CountAsync();
+                var totalAuctions = await _context.Auctions.CountAsync();
+                
+                summary["Phiên đấu giá mới tháng này"] = newAuctionsThisMonth;
+                summary["Phiên đấu giá mới tháng trước"] = newAuctionsLastMonth;
+                summary["Tổng số phiên đấu giá"] = totalAuctions;
+                break;
+
+            case "totaltransactions":
+                // Get revenue data for last 12 months
+                for (int i = 11; i >= 0; i--)
+                {
+                    var monthStart = new DateTime(now.Year, now.Month, 1).AddMonths(-i);
+                    var monthEnd = monthStart.AddMonths(1);
+                    var revenue = await _context.Auctions
+                        .Where(a => a.WinnerId != null &&
+                            a.CurrentBid != null &&
+                            a.EndTime >= monthStart && a.EndTime < monthEnd)
+                        .SumAsync(a => a.CurrentBid ?? 0);
+                    
+                    chartData.Add(new ChartDataPoint
+                    {
+                        Name = monthStart.ToString("MM/yyyy"),
+                        Value = revenue
+                    });
+                }
+                
+                // Summary
+                var revenueThisMonth = await _context.Auctions
+                    .Where(a => a.WinnerId != null &&
+                        a.CurrentBid != null &&
+                        a.EndTime >= new DateTime(now.Year, now.Month, 1) && 
+                        a.EndTime < new DateTime(now.Year, now.Month, 1).AddMonths(1))
+                    .SumAsync(a => a.CurrentBid ?? 0);
+                var revenueLastMonth = await _context.Auctions
+                    .Where(a => a.WinnerId != null &&
+                        a.CurrentBid != null &&
+                        a.EndTime >= new DateTime(now.Year, now.Month, 1).AddMonths(-1) && 
+                        a.EndTime < new DateTime(now.Year, now.Month, 1))
+                    .SumAsync(a => a.CurrentBid ?? 0);
+                var totalRevenue = await _context.Auctions
+                    .Where(a => a.WinnerId != null && a.CurrentBid != null)
+                    .SumAsync(a => a.CurrentBid ?? 0);
+                
+                summary["Doanh thu tháng này"] = revenueThisMonth;
+                summary["Doanh thu tháng trước"] = revenueLastMonth;
+                summary["Tổng doanh thu"] = totalRevenue;
+                break;
+
+            case "successrate":
+                // Get success rate data for last 12 months
+                for (int i = 11; i >= 0; i--)
+                {
+                    var monthStart = new DateTime(now.Year, now.Month, 1).AddMonths(-i);
+                    var monthEnd = monthStart.AddMonths(1);
+                    var completed = await _context.Auctions
+                        .Where(a => a.EndTime >= monthStart && a.EndTime < monthEnd && a.WinnerId != null)
+                        .CountAsync();
+                    var total = await _context.Auctions
+                        .Where(a => a.EndTime >= monthStart && a.EndTime < monthEnd)
+                        .CountAsync();
+                    var rate = total > 0 ? (completed / (decimal)total) * 100 : 0;
+                    
+                    chartData.Add(new ChartDataPoint
+                    {
+                        Name = monthStart.ToString("MM/yyyy"),
+                        Value = (decimal)Math.Round(rate, 1)
+                    });
+                }
+                
+                // Summary
+                var completedThisMonth = await _context.Auctions
+                    .Where(a => a.EndTime >= new DateTime(now.Year, now.Month, 1) && 
+                        a.EndTime < new DateTime(now.Year, now.Month, 1).AddMonths(1) && 
+                        a.WinnerId != null)
+                    .CountAsync();
+                var totalThisMonth = await _context.Auctions
+                    .Where(a => a.EndTime >= new DateTime(now.Year, now.Month, 1) && 
+                        a.EndTime < new DateTime(now.Year, now.Month, 1).AddMonths(1))
+                    .CountAsync();
+                var rateThisMonth = totalThisMonth > 0 ? (completedThisMonth / (decimal)totalThisMonth) * 100 : 0;
+                
+                summary["Tỷ lệ thành công tháng này"] = $"{Math.Round(rateThisMonth, 1)}%";
+                summary["Phiên hoàn thành"] = completedThisMonth;
+                summary["Tổng phiên kết thúc"] = totalThisMonth;
+                break;
+
+            default:
+                // Return empty data for unknown types
+                break;
+        }
+
+        return new PlatformAnalyticsDetailDto
+        {
+            ChartData = chartData,
+            Summary = summary
+        };
+    }
 }
 

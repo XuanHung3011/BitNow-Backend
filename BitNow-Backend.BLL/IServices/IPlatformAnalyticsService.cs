@@ -5,5 +5,6 @@ namespace BitNow_Backend.BLL.IServices;
 public interface IPlatformAnalyticsService
 {
     Task<PlatformAnalyticsDto> GetPlatformAnalyticsAsync();
+    Task<PlatformAnalyticsDetailDto> GetAnalyticsDetailAsync(string type);
 }
 
