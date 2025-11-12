@@ -7,5 +7,7 @@ namespace BitNow_Backend.DAL.IRepositories
 	{
 		Task<Auction?> GetByIdAsync(int id);
 		Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsWithFilterAsync(AuctionFilterDto filter);
-	}
+
+        Task<Auction> CreateAsync(Auction auction);
+    }
 }
