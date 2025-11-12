@@ -76,4 +76,17 @@ namespace BitNow_Backend.DAL.DTOs
         public string? Slug { get; set; }
         public string? Icon { get; set; }
     }
+
+
+    public class CreateItemDto
+    {
+        public int SellerId { get; set; }
+        public int CategoryId { get; set; }
+        public string Title { get; set; } = null!;
+        public string? Description { get; set; }
+        public string? Condition { get; set; }
+        public string? Location { get; set; }
+        public decimal BasePrice { get; set; }
+        // Images will be handled separately as IFormFile
+    }
 }
