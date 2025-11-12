@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -34,6 +35,9 @@ builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
+
+// File Upload Service
+builder.Services.AddScoped<BitNow_Backend.Services.IFileUploadService, BitNow_Backend.Services.FileUploadService>();
 // Bids
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IBidService, BidService>();
@@ -100,6 +104,21 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseAuthorization();
+
+// Serve static files from uploads folder
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+
+// Configure static file serving for uploads
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
+
 
 app.MapControllers();
 // SignalR hubs

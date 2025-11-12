@@ -127,11 +127,51 @@ namespace BitNow_Backend.BLL.Services
             return MapToResponseDto(item);
         }
 
+        public async Task<ItemResponseDto?> CreateItemAsync(CreateItemDto dto, string? imagesPath = null)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(dto.Title))
+            {
+                throw new ArgumentException("Title is required");
+            }
+
+            if (dto.BasePrice <= 0)
+            {
+                throw new ArgumentException("BasePrice must be greater than 0");
+            }
+
+            // Check if category exists by getting categories
+            var categories = await _itemRepository.GetCategoriesAsync();
+            if (!categories.Any(c => c.Id == dto.CategoryId))
+            {
+                throw new ArgumentException("Category not found");
+            }
+
+            // Create item with pending status
+            var item = new Item
+            {
+                SellerId = dto.SellerId,
+                CategoryId = dto.CategoryId,
+                Title = dto.Title,
+                Description = dto.Description,
+                Images = imagesPath, // Store comma-separated paths
+                Condition = dto.Condition,
+                Location = dto.Location,
+                BasePrice = dto.BasePrice,
+                Status = "pending",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var createdItem = await _itemRepository.CreateAsync(item);
+
+            // Reload with includes to get full data
+            return await GetByIdAsync(createdItem.Id);
+        }
         private static ItemResponseDto MapToResponseDto(Item item)
         {
             // Lấy auction mới nhất hoặc đang active của item
             var activeAuction = item.Auctions?
-                .Where(a => a.Status == "active" || a.Status == "pending")
+                .Where(a => a.Status == "active")
                 .OrderByDescending(a => a.CreatedAt)
                 .FirstOrDefault();
 

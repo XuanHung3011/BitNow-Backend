@@ -32,5 +32,8 @@ namespace BitNow_Backend.BLL.IServices
 
         // Get item by ID
         Task<ItemResponseDto?> GetByIdAsync(int id);
+
+        // Create new item
+        Task<ItemResponseDto?> CreateItemAsync(CreateItemDto dto, string? imagesPath = null);
     }
 }
