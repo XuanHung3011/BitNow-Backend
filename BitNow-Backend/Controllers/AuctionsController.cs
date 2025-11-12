@@ -13,16 +13,75 @@ namespace BitNow_Backend.Controllers
 		private readonly IAuctionService _auctionService;
 		private readonly IBidService _bidService;
 		private readonly IHubContext<AuctionHub> _hubContext;
+        private readonly ILogger<AuctionsController> _logger;
 
-		public AuctionsController(IAuctionService auctionService, IBidService bidService, IHubContext<AuctionHub> hubContext)
-		{
-			_auctionService = auctionService;
-			_bidService = bidService;
-			_hubContext = hubContext;
-		}
+        public AuctionsController(IAuctionService auctionService, IBidService bidService, IHubContext<AuctionHub> hubContext, ILogger<AuctionsController> logger)
+        {
+            _auctionService = auctionService;
+            _bidService = bidService;
+            _hubContext = hubContext;
+            _logger = logger;
+        }
 
-		[HttpGet("{id}")]
-		public async Task<ActionResult<AuctionDetailDto>> Get(int id)
+        /// <summary>
+		/// Create a new auction (status will be 'active' immediately)
+		/// </summary>
+		[HttpPost]
+        public async Task<ActionResult<AuctionResponseDto>> Create([FromBody] CreateAuctionDto dto)
+        {
+            try
+            {
+                _logger.LogInformation("Create auction called with ItemId: {ItemId}, SellerId: {SellerId}", dto?.ItemId, dto?.SellerId);
+
+                if (dto == null)
+                {
+                    _logger.LogWarning("CreateAuctionDto is null");
+                    return BadRequest(new { message = "Request body is required" });
+                }
+
+                var result = await _auctionService.CreateAuctionAsync(dto);
+                if (result == null)
+                {
+                    _logger.LogWarning("CreateAuctionAsync returned null");
+                    return BadRequest(new { message = "Failed to create auction" });
+                }
+
+                _logger.LogInformation("Auction created successfully with ID: {AuctionId}", result.Id);
+                return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument when creating auction: {Message}", ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid operation when creating auction: {Message}", ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Unauthorized access when creating auction: {Message}", ex.Message);
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating auction: {Message}, StackTrace: {StackTrace}, InnerException: {InnerException}",
+                    ex.Message, ex.StackTrace, ex.InnerException?.Message);
+
+                // Return more detailed error message
+                var errorMessage = ex.Message;
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $" Inner: {ex.InnerException.Message}";
+                }
+
+                return StatusCode(500, new { message = "Internal server error", error = errorMessage });
+            }
+        }
+
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<AuctionDetailDto>> Get(int id)
 		{
 			var dto = await _auctionService.GetDetailAsync(id);
 			if (dto == null) return NotFound();

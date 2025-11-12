@@ -2,6 +2,9 @@ using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
 using System;
+using BitNow_Backend.DAL.Models;
+using System;
+using System.Linq;
 using System.Linq;
 
 namespace BitNow_Backend.BLL.Services
@@ -9,13 +12,15 @@ namespace BitNow_Backend.BLL.Services
 	public class AuctionService : IAuctionService
 	{
 		private readonly IAuctionRepository _auctionRepository;
+        private readonly IItemRepository _itemRepository;
 
-		public AuctionService(IAuctionRepository auctionRepository)
-		{
-			_auctionRepository = auctionRepository;
-		}
+        public AuctionService(IAuctionRepository auctionRepository, IItemRepository itemRepository)
+        {
+            _auctionRepository = auctionRepository;
+            _itemRepository = itemRepository;
+        }
 
-		public async Task<AuctionDetailDto?> GetDetailAsync(int id)
+        public async Task<AuctionDetailDto?> GetDetailAsync(int id)
 		{
 			var a = await _auctionRepository.GetByIdAsync(id);
 			if (a == null) return null;
@@ -101,5 +106,86 @@ namespace BitNow_Backend.BLL.Services
 				PageSize = filter.PageSize
 			};
 		}
-	}
+
+        public async Task<AuctionResponseDto?> CreateAuctionAsync(CreateAuctionDto dto)
+        {
+            // Validate item exists
+            var item = await _itemRepository.GetByIdAsync(dto.ItemId);
+            if (item == null)
+            {
+                throw new ArgumentException("Item not found");
+            }
+
+            // Allow creating auction for items with status "pending" or "approved"
+            // Rejected items cannot have auctions
+            if (item.Status == "rejected")
+            {
+                throw new InvalidOperationException("Cannot create auction for a rejected item");
+            }
+
+            // Validate seller owns the item
+            if (item.SellerId != dto.SellerId)
+            {
+                throw new UnauthorizedAccessException("You can only create auctions for your own items");
+            }
+
+            // Check if item already has an active auction
+            // Load Auctions navigation property if not loaded
+            if (item.Auctions == null)
+            {
+                // Reload item with Auctions included
+                item = await _itemRepository.GetByIdAsync(dto.ItemId);
+            }
+
+            if (item.Auctions != null && item.Auctions.Any(a => a.Status == "active" || a.Status == "draft" || a.Status == "scheduled"))
+            {
+                throw new InvalidOperationException("Item already has an active, draft, or scheduled auction");
+            }
+
+            // Validate dates
+            if (dto.StartTime >= dto.EndTime)
+            {
+                throw new ArgumentException("Start time must be before end time");
+            }
+
+            if (dto.StartTime < DateTime.UtcNow)
+            {
+                throw new ArgumentException("Start time cannot be in the past");
+            }
+
+            // Create auction with active status (auction starts immediately)
+            // Only set foreign key IDs, not navigation properties
+            var auction = new Auction
+            {
+                ItemId = dto.ItemId,
+                SellerId = dto.SellerId,
+                StartingBid = dto.StartingBid,
+                BuyNowPrice = dto.BuyNowPrice,
+                StartTime = dto.StartTime,
+                EndTime = dto.EndTime,
+                Status = "active", // Set to active immediately when created
+                BidCount = 0,
+                CurrentBid = null,
+                CreatedAt = DateTime.UtcNow,
+                WinnerId = null
+            };
+
+            var createdAuction = await _auctionRepository.CreateAsync(auction);
+
+            return new AuctionResponseDto
+            {
+                Id = createdAuction.Id,
+                ItemId = createdAuction.ItemId,
+                SellerId = createdAuction.SellerId,
+                StartingBid = createdAuction.StartingBid,
+                CurrentBid = createdAuction.CurrentBid,
+                BuyNowPrice = createdAuction.BuyNowPrice,
+                StartTime = createdAuction.StartTime,
+                EndTime = createdAuction.EndTime,
+                Status = createdAuction.Status,
+                BidCount = createdAuction.BidCount,
+                CreatedAt = createdAuction.CreatedAt
+            };
+        }
+    }
 }
