@@ -103,5 +103,41 @@ namespace BitNow_Backend.DAL.Repositories
 
 			return (auctions, totalCount);
 		}
-	}
+
+        public async Task<Auction> CreateAsync(Auction auction)
+        {
+            try
+            {
+                // Create a new entity with only foreign key IDs
+                // Don't set navigation properties to avoid relationship issues
+                var newAuction = new Auction
+                {
+                    ItemId = auction.ItemId,
+                    SellerId = auction.SellerId,
+                    StartingBid = auction.StartingBid,
+                    BuyNowPrice = auction.BuyNowPrice,
+                    StartTime = auction.StartTime,
+                    EndTime = auction.EndTime,
+                    Status = auction.Status,
+                    BidCount = auction.BidCount,
+                    CurrentBid = auction.CurrentBid,
+                    CreatedAt = auction.CreatedAt,
+                    WinnerId = auction.WinnerId
+                };
+
+                // Add the new entity (without navigation properties)
+                _context.Auctions.Add(newAuction);
+                await _context.SaveChangesAsync();
+
+                // Reload with includes to get full data
+                return await GetByIdAsync(newAuction.Id) ?? newAuction;
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+            {
+                // Log inner exception for debugging
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Database error: {innerMessage}", ex);
+            }
+        }
+    }
 }

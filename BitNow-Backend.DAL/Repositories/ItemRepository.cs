@@ -437,5 +437,12 @@ namespace BitNow_Backend.DAL.Repositories
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<Item> CreateAsync(Item item)
+        {
+            _context.Items.Add(item);
+            await _context.SaveChangesAsync();
+            return item;
+        }
     }
 }
