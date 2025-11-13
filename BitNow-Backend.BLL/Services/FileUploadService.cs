@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
 
 namespace BitNow_Backend.Services
 {
@@ -15,9 +16,11 @@ namespace BitNow_Backend.Services
         private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
         private const long _maxFileSize = 10 * 1024 * 1024; // 10MB
 
+
         public FileUploadService(IWebHostEnvironment environment)
         {
-            _rootPath = Path.Combine(environment.ContentRootPath, "uploads");
+            // Lưu ảnh vào root của server (ContentRootPath)
+            _rootPath = environment.ContentRootPath;
 
             // Create uploads directory if it doesn't exist
             if (!Directory.Exists(_rootPath))
@@ -40,16 +43,11 @@ namespace BitNow_Backend.Services
             if (file.Length > _maxFileSize)
                 throw new ArgumentException($"File size exceeds maximum allowed size of {_maxFileSize / (1024 * 1024)}MB");
 
-            // Create subfolder if it doesn't exist
-            var folderPath = Path.Combine(_rootPath, subfolder);
-            if (!Directory.Exists(folderPath))
-            {
-                Directory.CreateDirectory(folderPath);
-            }
-
+            
             // Generate unique filename
             var fileName = $"{Guid.NewGuid()}{extension}";
-            var filePath = Path.Combine(folderPath, fileName);
+            // Lưu trực tiếp vào root của server
+            var filePath = Path.Combine(_rootPath, fileName);
 
             // Save file
             using (var stream = new FileStream(filePath, FileMode.Create))
@@ -57,9 +55,8 @@ namespace BitNow_Backend.Services
                 await file.CopyToAsync(stream);
             }
 
-            // Return relative path from root (e.g., "uploads/items/guid.jpg")
-            // This path will be accessible via /uploads/items/guid.jpg
-            return Path.Combine("uploads", subfolder, fileName).Replace("\\", "/");
+            // Return filename (ảnh được lưu ở root)
+            return fileName;
         }
 
         public async Task<List<string>> SaveImagesAsync(List<IFormFile> files, string subfolder = "items")
@@ -91,12 +88,8 @@ namespace BitNow_Backend.Services
 
             try
             {
-                // If path is relative, combine with root path
-                var fullPath = imagePath.StartsWith("uploads")
-                    ? Path.Combine(_rootPath, "..", imagePath)
-                    : imagePath;
-
-                fullPath = Path.GetFullPath(fullPath);
+                // Ảnh được lưu ở root, nên chỉ cần combine với root path
+                var fullPath = Path.Combine(_rootPath, imagePath);
 
                 if (File.Exists(fullPath))
                 {
