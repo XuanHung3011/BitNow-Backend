@@ -224,5 +224,43 @@ namespace BitNow_Backend.BLL.Services
                 PageSize = pageSize
             };
         }
+        public async Task<PaginatedResult<BuyerWonAuctionDto>> GetWonAuctionsByBuyerAsync(int bidderId, int page = 1, int pageSize = 10)
+        {
+            var (auctions, totalCount) = await _auctionRepository.GetWonAuctionsByBidderAsync(bidderId, page, pageSize);
+
+            var items = auctions.Select(a =>
+            {
+                // Get user's highest bid (which should be the winning bid)
+                var userBids = a.Bids?.Where(b => b.BidderId == bidderId).ToList() ?? new List<Bid>();
+                var finalBid = userBids.Any() ? userBids.Max(b => b.Amount) : (a.CurrentBid ?? a.StartingBid);
+
+                // Check if user has rated (you'll need to implement this based on your Rating system)
+                // For now, defaulting to false
+                var hasRated = false; // TODO: Check if rating exists for this auction and buyer
+
+                return new BuyerWonAuctionDto
+                {
+                    AuctionId = a.Id,
+                    ItemTitle = a.Item?.Title ?? "",
+                    ItemImages = a.Item?.Images,
+                    CategoryName = a.Item?.Category?.Name,
+                    FinalBid = finalBid,
+                    WonDate = a.EndTime, // Use EndTime as WonDate
+                    EndTime = a.EndTime,
+                    Status = a.Status ?? "completed",
+                    SellerName = a.Seller?.FullName,
+                    SellerId = a.SellerId,
+                    HasRated = hasRated
+                };
+            }).ToList();
+
+            return new PaginatedResult<BuyerWonAuctionDto>
+            {
+                Data = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
     }
 }

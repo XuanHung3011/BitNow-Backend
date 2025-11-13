@@ -85,4 +85,19 @@ namespace BitNow_Backend.DAL.DTOs
         public int TotalBids { get; set; }
         public int YourBidCount { get; set; }
     }
+
+    public class BuyerWonAuctionDto
+    {
+        public int AuctionId { get; set; }
+        public string ItemTitle { get; set; } = null!;
+        public string? ItemImages { get; set; }
+        public string? CategoryName { get; set; }
+        public decimal FinalBid { get; set; }
+        public DateTime WonDate { get; set; }
+        public DateTime EndTime { get; set; }
+        public string Status { get; set; } = null!; // completed
+        public string? SellerName { get; set; }
+        public int SellerId { get; set; }
+        public bool HasRated { get; set; }
+    }
 }

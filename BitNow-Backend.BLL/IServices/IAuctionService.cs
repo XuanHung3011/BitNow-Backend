@@ -10,5 +10,6 @@ namespace BitNow_Backend.BLL.IServices
         Task<AuctionResponseDto?> CreateAuctionAsync(CreateAuctionDto dto);
 
         Task<PaginatedResult<BuyerActiveBidDto>> GetActiveBidsByBuyerAsync(int bidderId, int page = 1, int pageSize = 10);
+        Task<PaginatedResult<BuyerWonAuctionDto>> GetWonAuctionsByBuyerAsync(int bidderId, int page = 1, int pageSize = 10);
     }
 }

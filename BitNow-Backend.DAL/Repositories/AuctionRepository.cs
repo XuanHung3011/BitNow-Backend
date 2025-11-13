@@ -168,5 +168,29 @@ namespace BitNow_Backend.DAL.Repositories
 
             return (auctions, totalCount);
         }
+        public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetWonAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10)
+        {
+            var now = DateTime.UtcNow;
+
+            // Get auctions where user is the winner
+            var query = _context.Auctions
+                .Include(a => a.Item)
+                    .ThenInclude(i => i.Category)
+                .Include(a => a.Seller)
+                .Include(a => a.Bids.Where(b => b.BidderId == bidderId))
+                .Where(a => a.WinnerId == bidderId) // User is the winner
+                .Where(a => a.Status == "completed" || a.EndTime < now) // Auction has ended
+                .OrderByDescending(a => a.EndTime); // Most recent first
+
+            var totalCount = await query.CountAsync();
+
+            var skip = (page - 1) * pageSize;
+            var auctions = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (auctions, totalCount);
+        }
     }
 }

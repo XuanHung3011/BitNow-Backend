@@ -138,5 +138,23 @@ namespace BitNow_Backend.Controllers
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
+
+        [HttpGet("buyer/{bidderId}/won")]
+        public async Task<ActionResult<PaginatedResult<BuyerWonAuctionDto>>> GetWonAuctionsByBuyer(
+            int bidderId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _auctionService.GetWonAuctionsByBuyerAsync(bidderId, page, pageSize);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting won auctions for buyer {BidderId}", bidderId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
     }
 }
