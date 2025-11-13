@@ -365,6 +365,12 @@ namespace BitNow_Backend.DAL.Repositories
                 query = query.Where(i => i.CategoryId == filter.CategoryId.Value);
             }
 
+            // Filter by sellerId (quan trọng: chỉ hiển thị items của seller đó)
+            if (filter.SellerId.HasValue && filter.SellerId.Value > 0)
+            {
+                query = query.Where(i => i.SellerId == filter.SellerId.Value);
+            }
+
             // Sorting
             var sortBy = (filter.SortBy ?? "CreatedAt").ToLower();
             var sortOrder = (filter.SortOrder ?? "desc").ToLower();
@@ -420,6 +426,12 @@ namespace BitNow_Backend.DAL.Repositories
             if (filter.CategoryId.HasValue && filter.CategoryId.Value > 0)
             {
                 query = query.Where(i => i.CategoryId == filter.CategoryId.Value);
+            }
+
+            // Filter by sellerId (quan trọng: chỉ đếm items của seller đó)
+            if (filter.SellerId.HasValue && filter.SellerId.Value > 0)
+            {
+                query = query.Where(i => i.SellerId == filter.SellerId.Value);
             }
 
             return await query.CountAsync();
