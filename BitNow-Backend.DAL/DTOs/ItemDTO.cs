@@ -64,6 +64,7 @@ namespace BitNow_Backend.DAL.DTOs
     {
         public List<string>? Statuses { get; set; }  // 'pending', 'approved', 'rejected', 'archived'
         public int? CategoryId { get; set; }  // Filter theo category
+        public int? SellerId { get; set; }  // Filter theo seller (để chỉ hiển thị items của seller đó)
         public string? SortBy { get; set; } = "CreatedAt";  // Title, BasePrice, CreatedAt
         public string? SortOrder { get; set; } = "desc";  // asc, desc
         public int Page { get; set; } = 1;
