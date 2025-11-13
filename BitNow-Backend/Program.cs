@@ -28,10 +28,10 @@ builder.Services.AddScoped<IWatchlistService, WatchlistService>();
 builder.Services.AddScoped<IWatchlistRepository, WatchlistRepository>();
 builder.Services.AddScoped<IAuctionService, AuctionService>();
 builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
-	builder.Services.AddScoped<IItemService, ItemService>();
-	builder.Services.AddScoped<IItemRepository, ItemRepository>();
-	builder.Services.AddScoped<IMessageService, MessageService>();
-	builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<IItemService, ItemService>();
+builder.Services.AddScoped<IItemRepository, ItemRepository>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
@@ -105,18 +105,23 @@ if (!app.Environment.IsDevelopment())
 
 app.UseAuthorization();
 
-// Serve static files from uploads folder
-var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
-if (!Directory.Exists(uploadsPath))
+ 
+
+// Serve static files from wwwroot folder (nơi lưu ảnh)
+var wwwrootPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+
+// Đảm bảo thư mục wwwroot tồn tại
+if (!Directory.Exists(wwwrootPath))
 {
-    Directory.CreateDirectory(uploadsPath);
+    Directory.CreateDirectory(wwwrootPath);
 }
 
-// Configure static file serving for uploads
+// Configure static file serving from wwwroot
+// Ảnh được lưu trong wwwroot/uploads, truy cập qua /images/uploads/filename
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
-    RequestPath = "/uploads"
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(wwwrootPath),
+    RequestPath = "/images"
 });
 
 
