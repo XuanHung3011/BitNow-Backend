@@ -187,5 +187,42 @@ namespace BitNow_Backend.BLL.Services
                 CreatedAt = createdAuction.CreatedAt
             };
         }
+        public async Task<PaginatedResult<BuyerActiveBidDto>> GetActiveBidsByBuyerAsync(int bidderId, int page = 1, int pageSize = 10)
+        {
+            var (auctions, totalCount) = await _auctionRepository.GetAuctionsByBidderAsync(bidderId, page, pageSize);
+
+            var items = auctions.Select(a =>
+            {
+                // Get user's bids for this auction
+                var userBids = a.Bids?.Where(b => b.BidderId == bidderId).ToList() ?? new List<Bid>();
+                var userHighestBid = userBids.Any() ? userBids.Max(b => b.Amount) : 0;
+
+                // Check if user is leading
+                var currentBid = a.CurrentBid ?? a.StartingBid;
+                var isLeading = userHighestBid >= currentBid;
+
+                return new BuyerActiveBidDto
+                {
+                    AuctionId = a.Id,
+                    ItemTitle = a.Item?.Title ?? "",
+                    ItemImages = a.Item?.Images,
+                    CategoryName = a.Item?.Category?.Name,
+                    CurrentBid = currentBid,
+                    YourHighestBid = userHighestBid,
+                    IsLeading = isLeading,
+                    EndTime = a.EndTime,
+                    TotalBids = a.BidCount ?? 0,
+                    YourBidCount = userBids.Count
+                };
+            }).ToList();
+
+            return new PaginatedResult<BuyerActiveBidDto>
+            {
+                Data = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
     }
 }

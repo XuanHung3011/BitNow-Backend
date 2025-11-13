@@ -119,5 +119,24 @@ namespace BitNow_Backend.Controllers
 			var highest = await _bidService.GetHighestBidAsync(id);
 			return Ok(highest);
 		}
-	}
+
+
+        [HttpGet("buyer/{bidderId}/active")]
+        public async Task<ActionResult<PaginatedResult<BuyerActiveBidDto>>> GetActiveBidsByBuyer(
+            int bidderId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _auctionService.GetActiveBidsByBuyerAsync(bidderId, page, pageSize);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting active bids for buyer {BidderId}", bidderId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+    }
 }

@@ -8,5 +8,7 @@ namespace BitNow_Backend.BLL.IServices
 		Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter);
 
         Task<AuctionResponseDto?> CreateAuctionAsync(CreateAuctionDto dto);
+
+        Task<PaginatedResult<BuyerActiveBidDto>> GetActiveBidsByBuyerAsync(int bidderId, int page = 1, int pageSize = 10);
     }
 }

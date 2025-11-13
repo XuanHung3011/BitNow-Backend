@@ -139,5 +139,34 @@ namespace BitNow_Backend.DAL.Repositories
                 throw new Exception($"Database error: {innerMessage}", ex);
             }
         }
+        public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10)
+        {
+            var now = DateTime.UtcNow;
+
+            // Get distinct auction IDs where user has placed bids
+            var auctionIdsQuery = _context.Bids
+                .Where(b => b.BidderId == bidderId)
+                .Select(b => b.AuctionId)
+                .Distinct();
+
+            var query = _context.Auctions
+                .Include(a => a.Item)
+                    .ThenInclude(i => i.Category)
+                .Include(a => a.Seller)
+                .Include(a => a.Bids.Where(b => b.BidderId == bidderId)) // Include user's bids
+                .Where(a => auctionIdsQuery.Contains(a.Id))
+                .Where(a => a.Status == "active" && a.EndTime > now) // Only active auctions
+                .OrderByDescending(a => a.EndTime);
+
+            var totalCount = await query.CountAsync();
+
+            var skip = (page - 1) * pageSize;
+            var auctions = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (auctions, totalCount);
+        }
     }
 }
