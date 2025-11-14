@@ -195,7 +195,8 @@ namespace BitNow_Backend.Controllers
                 // Log kết quả để debug
                 if (sellerId.HasValue)
                 {
-                    _logger.LogInformation("GetAllItems returned {Count} items for sellerId: {SellerId}", result.Data.Count, sellerId.Value);
+                    var itemCount = result.Data?.Count() ?? 0;
+                    _logger.LogInformation("GetAllItems returned {Count} items for sellerId: {SellerId}", itemCount, sellerId.Value);
                 }
                 
                 return Ok(result);
