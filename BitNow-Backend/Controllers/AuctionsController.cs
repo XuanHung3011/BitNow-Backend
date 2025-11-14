@@ -156,5 +156,32 @@ namespace BitNow_Backend.Controllers
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
+
+        [HttpGet("buyer/{bidderId}/history")]
+        public async Task<ActionResult<PaginatedResultB<BiddingHistoryDto>>> GetBiddingHistory(
+            int bidderId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                _logger.LogInformation("Getting bidding history for buyer {BidderId}, page {Page}, pageSize {PageSize}",
+                    bidderId, page, pageSize);
+
+                var result = await _bidService.GetBiddingHistoryAsync(bidderId, page, pageSize);
+
+                _logger.LogInformation("Successfully retrieved {Count} bids for buyer {BidderId}",
+                    result.Data.Count, bidderId);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting bidding history for buyer {BidderId}: {Message}",
+                    bidderId, ex.Message);
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
     }
 }

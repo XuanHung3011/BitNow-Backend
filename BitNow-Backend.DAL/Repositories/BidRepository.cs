@@ -30,7 +30,27 @@ namespace BitNow_Backend.DAL.Repositories
 				.Take(limit)
 				.ToListAsync();
 		}
-	}
+        public async Task<IReadOnlyList<Bid>> GetBidsByBidderAsync(int bidderId, int skip, int take)
+        {
+            return await _ctx.Bids
+                .Include(b => b.Auction)
+                    .ThenInclude(a => a.Item)
+                        .ThenInclude(i => i.Category)
+                .Where(b => b.BidderId == bidderId)
+                .OrderByDescending(b => b.BidTime)
+                .Skip(skip)
+                .Take(take)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<int> GetTotalBidCountByBidderAsync(int bidderId)
+        {
+            return await _ctx.Bids
+                .Where(b => b.BidderId == bidderId)
+                .CountAsync();
+        }
+    }
 }
 
 
