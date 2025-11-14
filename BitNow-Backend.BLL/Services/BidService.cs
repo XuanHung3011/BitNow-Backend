@@ -159,7 +159,94 @@ namespace BitNow_Backend.BLL.Services
 			var a = await _auctionRepository.GetByIdAsync(auctionId);
 			return a?.CurrentBid;
 		}
-	}
+        public async Task<PaginatedResultB<BiddingHistoryDto>> GetBiddingHistoryAsync(int bidderId, int page, int pageSize)
+        {
+            try
+            {
+                var skip = (page - 1) * pageSize;
+
+                // ===== TỐI ƯU: Lấy tất cả data trong 1 query duy nhất =====
+                // Thay vì lấy bids rồi loop gọi GetHighestBidAsync từng auction (N+1 problem)
+                // Ta sẽ lấy toàn bộ data cần thiết trong 1 lần
+                var bidData = await _ctx.Bids
+                    .Where(b => b.BidderId == bidderId)
+                    .OrderByDescending(b => b.BidTime)
+                    .Skip(skip)
+                    .Take(pageSize)
+                    .Select(b => new
+                    {
+                        Bid = b,
+                        AuctionId = b.AuctionId,
+                        AuctionStatus = b.Auction.Status,
+                        AuctionWinnerId = b.Auction.WinnerId,
+                        AuctionCurrentBid = b.Auction.CurrentBid,
+                        AuctionEndTime = b.Auction.EndTime,
+                        ItemTitle = b.Auction.Item.Title,
+                        ItemImages = b.Auction.Item.Images,
+                        CategoryName = b.Auction.Item.Category.Name
+                    })
+                    .AsNoTracking() // Không tracking để nhanh hơn
+                    .ToListAsync();
+
+                // Lấy total count song song (có thể optimize thêm bằng cách cache)
+                var totalCount = await _ctx.Bids
+                    .Where(b => b.BidderId == bidderId)
+                    .CountAsync();
+
+                var historyList = new List<BiddingHistoryDto>();
+
+                foreach (var item in bidData)
+                {
+                    // Xác định trạng thái bid
+                    string status;
+                    if (string.Equals(item.AuctionStatus, "completed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        status = item.AuctionWinnerId == bidderId ? "won" : "lost";
+                    }
+                    else if (string.Equals(item.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // So sánh trực tiếp với CurrentBid từ Auction (đã được update realtime)
+                        // Không cần gọi GetHighestBidAsync nữa vì CurrentBid đã là giá cao nhất
+                        status = item.AuctionCurrentBid.HasValue && item.Bid.Amount >= item.AuctionCurrentBid.Value
+                            ? "leading"
+                            : "outbid";
+                    }
+                    else
+                    {
+                        status = "lost";
+                    }
+
+                    historyList.Add(new BiddingHistoryDto
+                    {
+                        BidId = item.Bid.Id,
+                        AuctionId = item.AuctionId,
+                        ItemTitle = item.ItemTitle ?? "Unknown Item",
+                        ItemImages = item.ItemImages,
+                        CategoryName = item.CategoryName,
+                        YourBid = item.Bid.Amount,
+                        BidTime = item.Bid.BidTime ?? DateTime.UtcNow,
+                        Status = status,
+                        CurrentBid = item.AuctionCurrentBid,
+                        EndTime = item.AuctionEndTime,
+                        AuctionStatus = item.AuctionStatus,
+                        IsAutoBid = item.Bid.IsAutoBid ?? false
+                    });
+                }
+
+                return new PaginatedResultB<BiddingHistoryDto>
+                {
+                    Data = historyList,
+                    TotalCount = totalCount,
+                    Page = page,
+                    PageSize = pageSize
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error retrieving bidding history: {ex.Message}", ex);
+            }
+        }
+    }
 }
 
 

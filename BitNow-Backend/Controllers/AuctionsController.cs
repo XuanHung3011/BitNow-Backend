@@ -119,5 +119,69 @@ namespace BitNow_Backend.Controllers
 			var highest = await _bidService.GetHighestBidAsync(id);
 			return Ok(highest);
 		}
-	}
+
+
+        [HttpGet("buyer/{bidderId}/active")]
+        public async Task<ActionResult<PaginatedResult<BuyerActiveBidDto>>> GetActiveBidsByBuyer(
+            int bidderId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _auctionService.GetActiveBidsByBuyerAsync(bidderId, page, pageSize);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting active bids for buyer {BidderId}", bidderId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        [HttpGet("buyer/{bidderId}/won")]
+        public async Task<ActionResult<PaginatedResult<BuyerWonAuctionDto>>> GetWonAuctionsByBuyer(
+            int bidderId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _auctionService.GetWonAuctionsByBuyerAsync(bidderId, page, pageSize);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting won auctions for buyer {BidderId}", bidderId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        [HttpGet("buyer/{bidderId}/history")]
+        public async Task<ActionResult<PaginatedResultB<BiddingHistoryDto>>> GetBiddingHistory(
+            int bidderId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                _logger.LogInformation("Getting bidding history for buyer {BidderId}, page {Page}, pageSize {PageSize}",
+                    bidderId, page, pageSize);
+
+                var result = await _bidService.GetBiddingHistoryAsync(bidderId, page, pageSize);
+
+                _logger.LogInformation("Successfully retrieved {Count} bids for buyer {BidderId}",
+                    result.Data.Count, bidderId);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting bidding history for buyer {BidderId}: {Message}",
+                    bidderId, ex.Message);
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
+    }
 }

@@ -15,12 +15,16 @@ namespace BitNow_Backend.DAL.Repositories
 
 		public async Task<Watchlist?> GetAsync(int userId, int auctionId)
 		{
-			return await _context.Watchlists.FirstOrDefaultAsync(w => w.UserId == userId && w.AuctionId == auctionId);
+			return await _context.Watchlists
+                .Include(w => w.Auction)
+                    .ThenInclude(a => a.Item)
+                        .ThenInclude(i => i.Category)
+                .FirstOrDefaultAsync(w => w.UserId == userId && w.AuctionId == auctionId);
 		}
 
 		public async Task<Watchlist?> GetByIdAsync(int id)
 		{
-			return await _context.Watchlists.Include(w => w.Auction).ThenInclude(a => a.Item).FirstOrDefaultAsync(w => w.Id == id);
+			return await _context.Watchlists.Include(w => w.Auction).ThenInclude(a => a.Item).ThenInclude(i => i.Category).FirstOrDefaultAsync(w => w.Id == id);
 		}
 
 		public async Task<IEnumerable<Watchlist>> GetByUserAsync(int userId)
@@ -28,7 +32,8 @@ namespace BitNow_Backend.DAL.Repositories
 			return await _context.Watchlists
 				.Include(w => w.Auction)
 				.ThenInclude(a => a.Item)
-				.Where(w => w.UserId == userId)
+                .ThenInclude(i => i.Category)
+                .Where(w => w.UserId == userId)
 				.OrderByDescending(w => w.AddedAt)
 				.ToListAsync();
 		}

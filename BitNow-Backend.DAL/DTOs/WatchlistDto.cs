@@ -28,5 +28,9 @@ namespace BitNow_Backend.DAL.DTOs
 		public decimal? BuyNowPrice { get; set; }
 		public DateTime EndTime { get; set; }
 		public string Status { get; set; } = null!;
-	}
+
+        public string? ItemImages { get; set; }
+        public string? CategoryName { get; set; }
+        public int? BidCount { get; set; }
+    }
 }
