@@ -35,5 +35,23 @@ public class PlatformAnalyticsController : ControllerBase
             return StatusCode(500, new { message = "Internal server error" });
         }
     }
+
+    /// <summary>
+    /// Get detailed analytics for a specific type (newUsers, newAuctions, totalTransactions, successRate)
+    /// </summary>
+    [HttpGet("detail/{type}")]
+    public async Task<ActionResult> GetAnalyticsDetail(string type)
+    {
+        try
+        {
+            var detail = await _platformAnalyticsService.GetAnalyticsDetailAsync(type);
+            return Ok(detail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting analytics detail for type: {Type}", type);
+            return StatusCode(500, new { message = "Internal server error" });
+        }
+    }
 }
 
