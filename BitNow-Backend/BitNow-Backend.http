@@ -1,6 +1,0 @@
-@BitNow_Backend_HostAddress = http://localhost:5167
-
-GET {{BitNow_Backend_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

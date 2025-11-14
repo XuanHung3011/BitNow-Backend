@@ -169,10 +169,11 @@ namespace BitNow_Backend.BLL.Services
         }
         private static ItemResponseDto MapToResponseDto(Item item)
         {
-            // Lấy auction mới nhất hoặc đang active của item
+            // Lấy auction mới nhất của item (ưu tiên active, sau đó lấy bất kỳ)
+            // Để hiển thị tất cả auctions, không chỉ active
             var activeAuction = item.Auctions?
-                .Where(a => a.Status == "active")
-                .OrderByDescending(a => a.CreatedAt)
+                .OrderByDescending(a => a.Status == "active" ? 1 : 0) // Ưu tiên active trước
+                .ThenByDescending(a => a.CreatedAt)
                 .FirstOrDefault();
 
             return new ItemResponseDto

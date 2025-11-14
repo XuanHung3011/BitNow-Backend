@@ -78,9 +78,10 @@ namespace BitNow_Backend.Controllers
                 {
                     try
                     {
-                        var savedPaths = await _fileUploadService.SaveImagesAsync(images, "items");
+                        // Truyền tên sản phẩm để đặt tên file theo tên sản phẩm
+                        var savedPaths = await _fileUploadService.SaveImagesAsync(images, dto.Title);
                         imagesPath = string.Join(",", savedPaths);
-                        _logger.LogInformation("Saved {Count} images for item", savedPaths.Count);
+                        _logger.LogInformation("Saved {Count} images for item '{Title}'", savedPaths.Count, dto.Title);
                     }
                     catch (Exception ex)
                     {
@@ -113,10 +114,11 @@ namespace BitNow_Backend.Controllers
 
 
         /// <summary>
-        /// Get all items with pagination, filtering by status and category, and sorting
+        /// Get all items with pagination, filtering by status, category, seller, and sorting
         /// </summary>
         /// <param name="statuses">Filter by status: 'pending', 'approved', 'rejected', 'archived' (comma-separated for multiple)</param>
         /// <param name="categoryId">Filter by category ID</param>
+        /// <param name="sellerId">Filter by seller ID (quan trọng: chỉ hiển thị items của seller đó)</param>
         /// <param name="sortBy">Sort by: 'Title', 'BasePrice', 'CreatedAt' (default: 'CreatedAt')</param>
         /// <param name="sortOrder">Sort order: 'asc' or 'desc' (default: 'desc')</param>
         /// <param name="page">Page number (default: 1)</param>
@@ -125,6 +127,7 @@ namespace BitNow_Backend.Controllers
         public async Task<ActionResult<PaginatedResult<ItemResponseDto>>> GetAllItems(
             [FromQuery] string? statuses = null,
             [FromQuery] int? categoryId = null,
+            [FromQuery] int? sellerId = null,
             [FromQuery] string? sortBy = "CreatedAt",
             [FromQuery] string? sortOrder = "desc",
             [FromQuery] int page = 1,
@@ -174,13 +177,27 @@ namespace BitNow_Backend.Controllers
                 {
                     Statuses = statusList,
                     CategoryId = categoryId,
+                    SellerId = sellerId,  // Quan trọng: filter theo sellerId để chỉ hiển thị items của seller đó
                     SortBy = sortBy,
                     SortOrder = sortOrder,
                     Page = page,
                     PageSize = pageSize
                 };
 
+                // Log để debug
+                if (sellerId.HasValue)
+                {
+                    _logger.LogInformation("GetAllItems called with sellerId filter: {SellerId}", sellerId.Value);
+                }
+
                 var result = await _itemService.GetAllItemsWithFilterAsync(filter);
+                
+                // Log kết quả để debug
+                if (sellerId.HasValue)
+                {
+                    _logger.LogInformation("GetAllItems returned {Count} items for sellerId: {SellerId}", result.Data.Count, sellerId.Value);
+                }
+                
                 return Ok(result);
             }
             catch (Exception ex)
