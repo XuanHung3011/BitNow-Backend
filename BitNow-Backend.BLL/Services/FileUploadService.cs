@@ -14,7 +14,7 @@ namespace BitNow_Backend.Services
         private readonly string _rootPath;
         private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
         private const long _maxFileSize = 10 * 1024 * 1024; // 10MB
-
+        /*
         public FileUploadService(IWebHostEnvironment environment)
         {
             _rootPath = Path.Combine(environment.ContentRootPath, "uploads");
@@ -25,6 +25,7 @@ namespace BitNow_Backend.Services
                 Directory.CreateDirectory(_rootPath);
             }
         }
+        */
 
         public async Task<string> SaveImageAsync(IFormFile file, string subfolder = "items")
         {
