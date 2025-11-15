@@ -47,6 +47,17 @@ namespace BitNow_Backend.Controllers
                 }
 
                 _logger.LogInformation("Auction created successfully with ID: {AuctionId}", result.Id);
+
+                var payload = new
+                {
+                    auctionId = result.Id,
+                    status = result.Status ?? "active",
+                    timestamp = DateTime.UtcNow
+                };
+                await _hubContext.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
+                await _hubContext.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+                await _hubContext.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+
                 return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
             }
             catch (ArgumentException ex)

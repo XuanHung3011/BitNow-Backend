@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using BitNow_Backend.Services;
 using System;
 using System.Linq;
+using Microsoft.AspNetCore.SignalR;
+using BitNow_Backend.RealTime;
 
 namespace BitNow_Backend.Controllers
 {
@@ -14,12 +16,14 @@ namespace BitNow_Backend.Controllers
         private readonly IItemService _itemService;
         private readonly ILogger<ItemsController> _logger;
         private readonly IFileUploadService _fileUploadService;
+        private readonly IHubContext<AuctionHub> _auctionHub;
 
-        public ItemsController(IItemService itemService, IFileUploadService fileUploadService, ILogger<ItemsController> logger)
+        public ItemsController(IItemService itemService, IFileUploadService fileUploadService, ILogger<ItemsController> logger, IHubContext<AuctionHub> auctionHub)
         {
             _itemService = itemService;
             _fileUploadService = fileUploadService;
             _logger = logger;
+            _auctionHub = auctionHub;
         }
 
         /// <summary>
@@ -98,6 +102,9 @@ namespace BitNow_Backend.Controllers
                 }
 
                 _logger.LogInformation("Item created successfully with ID: {ItemId}", result.Id);
+
+                await NotifyPendingAndDashboardAsync(result.Id, "created");
+
                 return Ok(result); // Use Ok instead of CreatedAtAction to ensure response is returned
             }
             catch (ArgumentException ex)
@@ -223,6 +230,8 @@ namespace BitNow_Backend.Controllers
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
 
+                await NotifyPendingAndDashboardAsync(id, "approved");
+
                 return Ok(new { message = "Item approved successfully" });
             }
             catch (Exception ex)
@@ -246,6 +255,8 @@ namespace BitNow_Backend.Controllers
                 {
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
+
+                await NotifyPendingAndDashboardAsync(id, "rejected");
 
                 return Ok(new { message = "Item rejected successfully" });
             }
@@ -278,6 +289,20 @@ namespace BitNow_Backend.Controllers
                 _logger.LogError(ex, "Error getting item {ItemId}", id);
                 return StatusCode(500, new { message = "Internal server error" });
             }
+        }
+
+        private async Task NotifyPendingAndDashboardAsync(int itemId, string status)
+        {
+            var payload = new
+            {
+                itemId,
+                status,
+                timestamp = DateTime.UtcNow
+            };
+
+            await _auctionHub.Clients.Group(AuctionHub.AdminPendingGroup).SendAsync("AdminPendingItemsChanged", payload);
+            await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+            await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
         }
     }
 }

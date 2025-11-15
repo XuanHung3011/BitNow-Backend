@@ -9,6 +9,7 @@ namespace BitNow_Backend.DAL.IRepositories
 		Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsWithFilterAsync(AuctionFilterDto filter);
 
         Task<Auction> CreateAsync(Auction auction);
+        Task<bool> UpdateStatusAsync(int id, string status);
 
 
         Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10);
