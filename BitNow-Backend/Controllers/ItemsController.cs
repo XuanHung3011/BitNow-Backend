@@ -6,6 +6,8 @@ using BitNow_Backend.Services;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
+using Microsoft.AspNetCore.SignalR;
+using BitNow_Backend.RealTime;
 
 namespace BitNow_Backend.Controllers
 {
@@ -18,19 +20,22 @@ namespace BitNow_Backend.Controllers
         private readonly IFileUploadService _fileUploadService;
         private readonly INotificationService _notificationService;
         private readonly BidNowDbContext _context;
+        private readonly IHubContext<AuctionHub> _auctionHub;
 
         public ItemsController(
             IItemService itemService, 
             IFileUploadService fileUploadService, 
             ILogger<ItemsController> logger,
             INotificationService notificationService,
-            BidNowDbContext context)
+            BidNowDbContext context,
+            IHubContext<AuctionHub> auctionHub)
         {
             _itemService = itemService;
             _fileUploadService = fileUploadService;
             _logger = logger;
             _notificationService = notificationService;
             _context = context;
+            _auctionHub = auctionHub;
         }
 
         /// <summary>
@@ -187,6 +192,9 @@ namespace BitNow_Backend.Controllers
                     // Log error nhưng không fail request nếu notification creation fails
                     _logger.LogError(ex, "Failed to create notifications for admins about item {ItemId}. Error: {Error}", result.Id, ex.ToString());
                 }
+
+                // Gửi SignalR update để refresh admin dashboard real-time
+                await NotifyPendingAndDashboardAsync(result.Id, "created");
 
                 return Ok(result); // Use Ok instead of CreatedAtAction to ensure response is returned
             }
@@ -353,6 +361,9 @@ namespace BitNow_Backend.Controllers
                     _logger.LogError(ex, "Failed to create notification for seller {SellerId} about approved item {ItemId}: {Message}", item.SellerId, id, ex.Message);
                 }
 
+                // Gửi SignalR update để refresh admin dashboard real-time
+                await NotifyPendingAndDashboardAsync(id, "approved");
+
                 return Ok(new { message = "Item approved successfully" });
             }
             catch (Exception ex)
@@ -417,6 +428,9 @@ namespace BitNow_Backend.Controllers
                     _logger.LogError(ex, "Failed to create notification for seller {SellerId} about rejected item {ItemId}: {Message}", item.SellerId, id, ex.Message);
                 }
 
+                // Gửi SignalR update để refresh admin dashboard real-time
+                await NotifyPendingAndDashboardAsync(id, "rejected");
+
                 return Ok(new { message = "Item rejected successfully" });
             }
             catch (Exception ex)
@@ -448,6 +462,20 @@ namespace BitNow_Backend.Controllers
                 _logger.LogError(ex, "Error getting item {ItemId}", id);
                 return StatusCode(500, new { message = "Internal server error" });
             }
+        }
+
+        private async Task NotifyPendingAndDashboardAsync(int itemId, string status)
+        {
+            var payload = new
+            {
+                itemId,
+                status,
+                timestamp = DateTime.UtcNow
+            };
+
+            await _auctionHub.Clients.Group(AuctionHub.AdminPendingGroup).SendAsync("AdminPendingItemsChanged", payload);
+            await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+            await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
         }
     }
 }

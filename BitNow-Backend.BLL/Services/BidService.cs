@@ -168,8 +168,9 @@ namespace BitNow_Backend.BLL.Services
                 // ===== TỐI ƯU: Lấy tất cả data trong 1 query duy nhất =====
                 // Thay vì lấy bids rồi loop gọi GetHighestBidAsync từng auction (N+1 problem)
                 // Ta sẽ lấy toàn bộ data cần thiết trong 1 lần
+                // CHỈ LẤY AUCTION ĐÃ HOÀN THÀNH (completed)
                 var bidData = await _ctx.Bids
-                    .Where(b => b.BidderId == bidderId)
+                    .Where(b => b.BidderId == bidderId && b.Auction.Status == "completed")
                     .OrderByDescending(b => b.BidTime)
                     .Skip(skip)
                     .Take(pageSize)
@@ -190,7 +191,7 @@ namespace BitNow_Backend.BLL.Services
 
                 // Lấy total count song song (có thể optimize thêm bằng cách cache)
                 var totalCount = await _ctx.Bids
-                    .Where(b => b.BidderId == bidderId)
+                    .Where(b => b.BidderId == bidderId && b.Auction.Status == "completed")
                     .CountAsync();
 
                 var historyList = new List<BiddingHistoryDto>();

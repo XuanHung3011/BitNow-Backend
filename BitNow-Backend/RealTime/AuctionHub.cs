@@ -5,6 +5,11 @@ namespace BitNow_Backend.RealTime
 {
 	public class AuctionHub : Hub
 	{
+		public const string AdminDashboardGroup = "admin-dashboard";
+		public const string AdminAuctionsGroup = "admin-auctions";
+		public const string AdminPendingGroup = "admin-pending";
+		public const string AdminAnalyticsGroup = "admin-analytics";
+
 		public async Task JoinAuctionGroup(string auctionId)
 		{
 			await Groups.AddToGroupAsync(Context.ConnectionId, $"auction-{auctionId}");
@@ -16,21 +21,52 @@ namespace BitNow_Backend.RealTime
 		}
 
 		/// <summary>
+		/// Join admin dashboard channel for real-time stats updates
+		/// </summary>
+		public Task JoinAdminChannel()
+		{
+			return Groups.AddToGroupAsync(Context.ConnectionId, AdminDashboardGroup);
+		}
+
+		/// <summary>
+		/// Leave admin dashboard channel
+		/// </summary>
+		public Task LeaveAdminChannel()
+		{
+			return Groups.RemoveFromGroupAsync(Context.ConnectionId, AdminDashboardGroup);
+		}
+
+		/// <summary>
 		/// Join admin section group for real-time updates (stats, pending items, analytics, etc.)
 		/// </summary>
 		/// <param name="section">Admin section name: "stats", "pending", "auctions", "analytics"</param>
-		public async Task JoinAdminSection(string section)
+		public Task JoinAdminSection(string section)
 		{
-			await Groups.AddToGroupAsync(Context.ConnectionId, $"admin-{section}");
+			return Groups.AddToGroupAsync(Context.ConnectionId, GetAdminGroup(section));
 		}
 
 		/// <summary>
 		/// Leave admin section group
 		/// </summary>
 		/// <param name="section">Admin section name</param>
-		public async Task LeaveAdminSection(string section)
+		public Task LeaveAdminSection(string section)
 		{
-			await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"admin-{section}");
+			return Groups.RemoveFromGroupAsync(Context.ConnectionId, GetAdminGroup(section));
+		}
+
+		/// <summary>
+		/// Map admin section name to group name
+		/// </summary>
+		private static string GetAdminGroup(string? section)
+		{
+			return section?.ToLower() switch
+			{
+				"auctions" => AdminAuctionsGroup,
+				"pending" => AdminPendingGroup,
+				"analytics" => AdminAnalyticsGroup,
+				"stats" => AdminDashboardGroup,
+				_ => $"admin-{section?.ToLower() ?? "general"}"
+			};
 		}
 	}
 }
