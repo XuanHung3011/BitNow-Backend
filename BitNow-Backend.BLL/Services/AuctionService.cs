@@ -3,16 +3,16 @@ using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
 using System;
 using BitNow_Backend.DAL.Models;
-using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace BitNow_Backend.BLL.Services
 {
 	public class AuctionService : IAuctionService
 	{
-		private readonly IAuctionRepository _auctionRepository;
+        private readonly IAuctionRepository _auctionRepository;
         private readonly IItemRepository _itemRepository;
+        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) { "draft", "active", "completed", "cancelled" };
 
         public AuctionService(IAuctionRepository auctionRepository, IItemRepository itemRepository)
         {
@@ -46,7 +46,7 @@ namespace BitNow_Backend.BLL.Services
 			};
 		}
 
-		public async Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
+        public async Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
 		{
 			var (auctions, totalCount) = await _auctionRepository.GetAuctionsWithFilterAsync(filter);
 			var now = DateTime.UtcNow;
@@ -55,9 +55,9 @@ namespace BitNow_Backend.BLL.Services
 			{
 				// Determine display status
 				string displayStatus;
-				if (a.Status != null && a.Status.ToLower() == "suspended")
-				{
-					displayStatus = "suspended";
+                if (a.Status != null && a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "cancelled";
 				}
 				else if (a.Status != null && a.Status.ToLower() == "active")
 				{
@@ -106,6 +106,21 @@ namespace BitNow_Backend.BLL.Services
 				PageSize = filter.PageSize
 			};
 		}
+
+        public async Task<bool> UpdateStatusAsync(int id, string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                throw new ArgumentException("Status is required", nameof(status));
+            }
+
+            if (!AllowedStatuses.Contains(status))
+            {
+                throw new ArgumentException($"Status must be one of: {string.Join(", ", AllowedStatuses)}");
+            }
+
+            return await _auctionRepository.UpdateStatusAsync(id, status);
+        }
 
         public async Task<AuctionResponseDto?> CreateAuctionAsync(CreateAuctionDto dto)
         {

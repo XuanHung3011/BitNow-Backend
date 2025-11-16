@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.SignalR;
+using BitNow_Backend.RealTime;
 
 namespace BitNow_Backend.Controllers;
 
@@ -13,18 +15,22 @@ public class AdminAuctionsController : ControllerBase
 {
     private readonly IAuctionService _auctionService;
     private readonly ILogger<AdminAuctionsController> _logger;
+    private readonly IHubContext<AuctionHub> _auctionHub;
+    private static readonly string[] ValidFilterStatuses = { "active", "scheduled", "completed", "cancelled" };
+    private static readonly string[] AllowedStatusUpdates = { "draft", "active", "completed", "cancelled" };
 
-    public AdminAuctionsController(IAuctionService auctionService, ILogger<AdminAuctionsController> logger)
+    public AdminAuctionsController(IAuctionService auctionService, ILogger<AdminAuctionsController> logger, IHubContext<AuctionHub> auctionHub)
     {
         _auctionService = auctionService;
         _logger = logger;
+        _auctionHub = auctionHub;
     }
 
     /// <summary>
     /// Get all auctions with pagination, search, and status filtering
     /// </summary>
     /// <param name="searchTerm">Search by item title or seller name</param>
-    /// <param name="statuses">Filter by status: 'active', 'scheduled', 'completed', 'suspended' (comma-separated for multiple)</param>
+    /// <param name="statuses">Filter by status: 'active', 'scheduled', 'completed', 'cancelled' (comma-separated for multiple)</param>
     /// <param name="sortBy">Sort by: 'ItemTitle', 'EndTime', 'CurrentBid', 'BidCount' (default: 'EndTime')</param>
     /// <param name="sortOrder">Sort order: 'asc' or 'desc' (default: 'desc')</param>
     /// <param name="page">Page number (default: 1)</param>
@@ -70,11 +76,10 @@ public class AdminAuctionsController : ControllerBase
                     .ToList();
 
                 // Validate status values
-                var validStatuses = new[] { "active", "scheduled", "completed", "suspended" };
-                var invalidStatuses = statusList.Where(s => !validStatuses.Contains(s, StringComparer.OrdinalIgnoreCase)).ToList();
+                var invalidStatuses = statusList.Where(s => !ValidFilterStatuses.Contains(s, StringComparer.OrdinalIgnoreCase)).ToList();
                 if (invalidStatuses.Any())
                 {
-                    return BadRequest(new { message = $"Invalid status values: {string.Join(", ", invalidStatuses)}. Valid values are: {string.Join(", ", validStatuses)}" });
+                    return BadRequest(new { message = $"Invalid status values: {string.Join(", ", invalidStatuses)}. Valid values are: {string.Join(", ", ValidFilterStatuses)}" });
                 }
             }
 
@@ -120,6 +125,59 @@ public class AdminAuctionsController : ControllerBase
             _logger.LogError(ex, "Error getting auction detail {AuctionId}", id);
             return StatusCode(500, new { message = "Internal server error" });
         }
+    }
+
+    /// <summary>
+    /// Update auction status (draft, active, completed, cancelled)
+    /// </summary>
+    [HttpPut("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateAuctionStatusRequest request)
+    {
+        try
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Status))
+            {
+                return BadRequest(new { message = "Status is required" });
+            }
+
+            var normalizedStatus = request.Status.Trim().ToLower();
+            if (!AllowedStatusUpdates.Contains(normalizedStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = $"Status must be one of: {string.Join(", ", AllowedStatusUpdates)}" });
+            }
+
+            var updated = await _auctionService.UpdateStatusAsync(id, normalizedStatus);
+            if (!updated)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            var payload = new
+            {
+                auctionId = id,
+                status = normalizedStatus,
+                timestamp = DateTime.UtcNow
+            };
+            await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
+            await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+            await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating auction status {AuctionId}", id);
+            return StatusCode(500, new { message = "Internal server error" });
+        }
+    }
+
+    public class UpdateAuctionStatusRequest
+    {
+        public string Status { get; set; } = string.Empty;
     }
 }
 
