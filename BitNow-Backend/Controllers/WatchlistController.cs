@@ -1,4 +1,4 @@
-using BitNow_Backend.BLL.IServices;
+﻿using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,7 +23,7 @@ namespace BitNow_Backend.Controllers
 		{
 			if (!ModelState.IsValid) return BadRequest(ModelState);
 			var ok = await _watchlistService.AddAsync(request);
-			return ok ? Ok(new { message = "Added" }) : BadRequest("Failed to add");
+			return ok ? Ok(new { message = "Đã thêm sản phẩm vào danh sách theo dõi" }) : BadRequest("Failed to add");
 		}
 
 		/// <summary>
@@ -34,7 +34,7 @@ namespace BitNow_Backend.Controllers
 		{
 			if (!ModelState.IsValid) return BadRequest(ModelState);
 			var ok = await _watchlistService.RemoveAsync(request);
-			return ok ? Ok(new { message = "Removed" }) : NotFound("Not found");
+			return ok ? Ok(new { message = "Đã xóa sản phẩm khỏi danh sách theo dõi" }) : NotFound("Not found");
 		}
 
 		/// <summary>
