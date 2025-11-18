@@ -48,6 +48,14 @@ builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
+
+// AI Recommendations
+builder.Services.AddScoped<IRecommendationService, RecommendationService>();
+
+// HttpClient (dùng cho OpenAI)
+builder.Services.AddHttpClient("OpenAI");
+
+
 // Add services to the container.
 builder.Services.AddControllers();
 
