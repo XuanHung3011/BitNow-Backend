@@ -43,6 +43,11 @@ builder.Services.AddScoped<BitNow_Backend.Services.IFileUploadService, BitNow_Ba
 // Bids
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IBidService, BidService>();
+// Auto Bids
+builder.Services.AddScoped<IAutoBidRepository, AutoBidRepository>();
+builder.Services.AddScoped<IAutoBidService, AutoBidService>();
+// Bid Notification
+builder.Services.AddScoped<BitNow_Backend.BLL.IServices.IBidNotificationService, BitNow_Backend.Services.BidNotificationService>();
 // Admin Stats
 builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
 // Platform Analytics

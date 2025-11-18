@@ -23,6 +23,8 @@ namespace BitNow_Backend.BLL.Services
 		private readonly IAuctionRepository _auctionRepository;
 		private readonly IBidRepository _bidRepository;
 		private readonly	IConnectionMultiplexer? _redis;
+		private readonly IServiceScopeFactory _serviceScopeFactory;
+		private readonly IBidNotificationService? _bidNotificationService;
 
 		public BidService(
 			BidNowDbContext ctx,
@@ -35,12 +37,14 @@ namespace BitNow_Backend.BLL.Services
 			_auctionRepository = auctionRepository;
 			_bidRepository = bidRepository;
 			_redis = serviceProvider.GetService<IConnectionMultiplexer>();
+			_serviceScopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
+			_bidNotificationService = serviceProvider.GetService<IBidNotificationService>();
 		}
 
 		private static string BidsKey(int auctionId) => $"auction:{auctionId}:bids";
 		private static string HighestKey(int auctionId) => $"auction:{auctionId}:highest";
 
-		public async Task<BidResultDto> PlaceBidAsync(int auctionId, int bidderId, decimal amount)
+		public async Task<BidResultDto> PlaceBidAsync(int auctionId, int bidderId, decimal amount, bool isAutoBid = false)
 		{
 			// Validate and persist in DB with optimistic checks
 			var auction = await _ctx.Auctions.FirstOrDefaultAsync(a => a.Id == auctionId);
@@ -60,7 +64,7 @@ namespace BitNow_Backend.BLL.Services
 				BidderId = bidderId,
 				Amount = amount,
 				BidTime = DateTime.UtcNow,
-				IsAutoBid = false
+				IsAutoBid = isAutoBid
 			};
 			await _bidRepository.AddAsync(bid);
 
@@ -99,7 +103,7 @@ namespace BitNow_Backend.BLL.Services
 				await db.StringSetAsync(HighestKey(auctionId), amount.ToString());
 			}
 
-			return new BidResultDto
+			var result = new BidResultDto
 			{
 				AuctionId = auctionId,
 				CurrentBid = auction.CurrentBid ?? amount,
@@ -112,6 +116,43 @@ namespace BitNow_Backend.BLL.Services
 					BidTime = bid.BidTime ?? DateTime.UtcNow
 				}
 			};
+
+			// Broadcast SignalR nếu có notification service (cho cả manual và auto bid)
+			// Broadcast ngay lập tức để tất cả clients nhận được update real-time
+			if (_bidNotificationService != null)
+			{
+				try
+				{
+					await _bidNotificationService.BroadcastBidPlacedAsync(auctionId, result);
+				}
+				catch
+				{
+					// Silently fail - broadcast không thành công không ảnh hưởng đến bid
+				}
+			}
+
+			// Xử lý auto bid sau khi đặt giá thành công (chỉ khi không phải auto bid)
+			if (!isAutoBid)
+			{
+				// Chạy async để không block response, tạo scope mới để tránh vấn đề với DbContext
+				_ = Task.Run(async () =>
+				{
+					try
+					{
+						using var scope = _serviceScopeFactory.CreateScope();
+						var autoBidService = scope.ServiceProvider.GetRequiredService<IAutoBidService>();
+						await autoBidService.ProcessAutoBidsAfterBidAsync(auctionId, bidderId, amount);
+					}
+					catch (Exception ex)
+					{
+						// Log error để debug
+						System.Diagnostics.Debug.WriteLine($"Auto bid processing error: {ex.Message}");
+						System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+					}
+				});
+			}
+
+			return result;
 		}
 
 		public async Task<IReadOnlyList<BidDto>> GetRecentBidsAsync(int auctionId, int limit)
