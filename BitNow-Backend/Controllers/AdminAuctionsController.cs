@@ -219,11 +219,78 @@ public class AdminAuctionsController : ControllerBase
         }
     }
 
+    [HttpPost("{id}/resume")]
+    public async Task<IActionResult> ResumeAuction(int id, [FromBody] ResumeAuctionRequest? request)
+    {
+        try
+        {
+            var auction = await _auctionService.GetDetailAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            if (!string.Equals(auction.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Chỉ có thể tiếp tục các phiên đấu giá đang bị tạm dừng." });
+            }
+
+            if (auction.EndTime <= DateTime.UtcNow)
+            {
+                return BadRequest(new { message = "Không thể tiếp tục phiên đấu giá đã kết thúc." });
+            }
+
+            var updated = await _auctionService.UpdateStatusAsync(id, "active");
+            if (!updated)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            var payload = new
+            {
+                auctionId = id,
+                status = "active",
+                timestamp = DateTime.UtcNow
+            };
+            await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
+            await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+            await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+
+            try
+            {
+                var note = string.IsNullOrWhiteSpace(request?.Reason) ? string.Empty : $"\nGhi chú: {request!.Reason!.Trim()}";
+                await _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                {
+                    UserId = auction.SellerId,
+                    Type = "auction-resumed",
+                    Message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin.{note}",
+                    Link = $"/seller/auctions/{auction.Id}"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create resume notification for auction {AuctionId}", auction.Id);
+            }
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resuming auction {AuctionId}", id);
+            return StatusCode(500, new { message = "Internal server error" });
+        }
+    }
+
     public class UpdateAuctionStatusRequest
     {
         public string Status { get; set; } = string.Empty;
         public string? Reason { get; set; }
         public string? AdminSignature { get; set; }
+    }
+
+    public class ResumeAuctionRequest
+    {
+        public string? Reason { get; set; }
     }
 }
 

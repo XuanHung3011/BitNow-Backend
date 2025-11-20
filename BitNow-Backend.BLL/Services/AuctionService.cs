@@ -91,6 +91,7 @@ namespace BitNow_Backend.BLL.Services
 					CategoryName = a.Item?.Category?.Name,
 					StartingBid = a.StartingBid,
 					CurrentBid = a.CurrentBid,
+                    StartTime = a.StartTime,
 					EndTime = a.EndTime,
 					Status = a.Status ?? "",
 					DisplayStatus = displayStatus,

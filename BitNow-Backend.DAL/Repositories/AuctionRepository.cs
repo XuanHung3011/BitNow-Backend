@@ -150,10 +150,6 @@ namespace BitNow_Backend.DAL.Repositories
                 }
 
                 auction.Status = status;
-                if (status.Equals("cancelled", StringComparison.OrdinalIgnoreCase) && auction.EndTime > DateTime.UtcNow)
-                {
-                    auction.EndTime = DateTime.UtcNow;
-                }
 
                 await _context.SaveChangesAsync();
                 return true;
