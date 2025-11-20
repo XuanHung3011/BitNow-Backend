@@ -16,14 +16,20 @@ public class AdminAuctionsController : ControllerBase
     private readonly IAuctionService _auctionService;
     private readonly ILogger<AdminAuctionsController> _logger;
     private readonly IHubContext<AuctionHub> _auctionHub;
+    private readonly INotificationService _notificationService;
     private static readonly string[] ValidFilterStatuses = { "active", "scheduled", "completed", "cancelled" };
     private static readonly string[] AllowedStatusUpdates = { "draft", "active", "completed", "cancelled" };
 
-    public AdminAuctionsController(IAuctionService auctionService, ILogger<AdminAuctionsController> logger, IHubContext<AuctionHub> auctionHub)
+    public AdminAuctionsController(
+        IAuctionService auctionService,
+        ILogger<AdminAuctionsController> logger,
+        IHubContext<AuctionHub> auctionHub,
+        INotificationService notificationService)
     {
         _auctionService = auctionService;
         _logger = logger;
         _auctionHub = auctionHub;
+        _notificationService = notificationService;
     }
 
     /// <summary>
@@ -146,6 +152,25 @@ public class AdminAuctionsController : ControllerBase
                 return BadRequest(new { message = $"Status must be one of: {string.Join(", ", AllowedStatusUpdates)}" });
             }
 
+            var auction = await _auctionService.GetDetailAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 10)
+                {
+                    return BadRequest(new { message = "Nguyên nhân tạm dừng phải có ít nhất 10 ký tự." });
+                }
+
+                if (!string.Equals(request.AdminSignature?.Trim(), "Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { message = "Bạn phải nhập chính xác chữ ký 'Admin' để xác nhận." });
+                }
+            }
+
             var updated = await _auctionService.UpdateStatusAsync(id, normalizedStatus);
             if (!updated)
             {
@@ -161,6 +186,25 @@ public class AdminAuctionsController : ControllerBase
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
             await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
             await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+
+            if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
+                try
+                {
+                    await _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                    {
+                        UserId = auction.SellerId,
+                        Type = "auction-suspended",
+                        Message = message,
+                        Link = $"/seller/auctions/{auction.Id}"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create suspension notification for auction {AuctionId}", auction.Id);
+                }
+            }
 
             return NoContent();
         }
@@ -178,6 +222,8 @@ public class AdminAuctionsController : ControllerBase
     public class UpdateAuctionStatusRequest
     {
         public string Status { get; set; } = string.Empty;
+        public string? Reason { get; set; }
+        public string? AdminSignature { get; set; }
     }
 }
 
