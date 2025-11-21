@@ -2,6 +2,8 @@ using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
+using Microsoft.AspNetCore.SignalR;
+using BitNow_Backend.RealTime;
 
 namespace BitNow_Backend.BLL.Services
 {
@@ -9,11 +11,16 @@ namespace BitNow_Backend.BLL.Services
     {
         private readonly INotificationRepository _notificationRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IHubContext<MessageHub>? _hubContext;
 
-        public NotificationService(INotificationRepository notificationRepository, IUserRepository userRepository)
+        public NotificationService(
+            INotificationRepository notificationRepository, 
+            IUserRepository userRepository,
+            IHubContext<MessageHub>? hubContext = null)
         {
             _notificationRepository = notificationRepository;
             _userRepository = userRepository;
+            _hubContext = hubContext;
         }
 
         public async Task<IEnumerable<NotificationResponseDto>> GetNotificationsByUserIdAsync(int userId, int page = 1, int pageSize = 20)
@@ -50,7 +57,23 @@ namespace BitNow_Backend.BLL.Services
             };
 
             var savedNotification = await _notificationRepository.AddAsync(notification);
-            return MapToNotificationResponseDto(savedNotification);
+            var notificationDto = MapToNotificationResponseDto(savedNotification);
+
+            // Broadcast notification real-time qua SignalR
+            if (_hubContext != null)
+            {
+                try
+                {
+                    await _hubContext.Clients.Group($"user-{dto.UserId}")
+                        .SendAsync("NotificationReceived", notificationDto);
+                }
+                catch
+                {
+                    // Silently fail - broadcast không thành công không ảnh hưởng đến việc tạo notification
+                }
+            }
+
+            return notificationDto;
         }
 
         public async Task<bool> MarkAsReadAsync(int notificationId, int userId)

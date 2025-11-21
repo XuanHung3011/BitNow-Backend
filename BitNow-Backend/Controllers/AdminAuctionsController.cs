@@ -192,23 +192,17 @@ public class AdminAuctionsController : ControllerBase
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
             await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
             await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+            
+            // Broadcast cho auction group để frontend có thể real-time update
+            await _auctionHub.Clients.Group($"auction-{id}").SendAsync("AuctionStatusUpdated", payload);
 
             if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
             {
                 var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
                 try
                 {
-                    // Gửi thông báo cho seller
-                    await _notificationService.CreateNotificationAsync(new CreateNotificationDto
-                    {
-                        UserId = auction.SellerId,
-                        Type = "auction-suspended",
-                        Message = message,
-                        Link = $"/seller/auctions/{auction.Id}"
-                    });
-
-                    // Gửi thông báo cho tất cả users đã tham gia đấu giá và watchlist
-                    await NotifyAuctionParticipantsAsync(id, message, "auction-suspended", $"/auction/{id}");
+                    // Gửi thông báo cho seller, bidders và watchlist users
+                    await NotifyAuctionParticipantsAsync(id, auction.SellerId, message, "auction-suspended", $"/auction/{id}");
                 }
                 catch (Exception ex)
                 {
@@ -265,23 +259,17 @@ public class AdminAuctionsController : ControllerBase
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
             await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
             await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+            
+            // Broadcast cho auction group để frontend có thể real-time update
+            await _auctionHub.Clients.Group($"auction-{id}").SendAsync("AuctionStatusUpdated", payload);
 
             try
             {
                 var note = string.IsNullOrWhiteSpace(request?.Reason) ? string.Empty : $"\nGhi chú: {request!.Reason!.Trim()}";
                 var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin.{note}";
                 
-                // Gửi thông báo cho seller
-                await _notificationService.CreateNotificationAsync(new CreateNotificationDto
-                {
-                    UserId = auction.SellerId,
-                    Type = "auction-resumed",
-                    Message = message,
-                    Link = $"/seller/auctions/{auction.Id}"
-                });
-
-                // Gửi thông báo cho tất cả users đã tham gia đấu giá và watchlist
-                await NotifyAuctionParticipantsAsync(id, message, "auction-resumed", $"/auction/{id}");
+                // Gửi thông báo cho seller, bidders và watchlist users
+                await NotifyAuctionParticipantsAsync(id, auction.SellerId, message, "auction-resumed", $"/auction/{id}");
             }
             catch (Exception ex)
             {
@@ -298,9 +286,9 @@ public class AdminAuctionsController : ControllerBase
     }
 
     /// <summary>
-    /// Gửi thông báo cho tất cả users đã tham gia đấu giá (bidders) và users trong watchlist
+    /// Gửi thông báo cho seller, tất cả users đã tham gia đấu giá (bidders) và users trong watchlist
     /// </summary>
-    private async Task NotifyAuctionParticipantsAsync(int auctionId, string message, string notificationType, string link)
+    private async Task NotifyAuctionParticipantsAsync(int auctionId, int sellerId, string message, string notificationType, string link)
     {
         try
         {
@@ -310,8 +298,9 @@ public class AdminAuctionsController : ControllerBase
             // Lấy danh sách distinct user IDs từ watchlist
             var watchlistUserIds = await _watchlistService.GetDistinctUserIdsByAuctionAsync(auctionId);
             
-            // Kết hợp và loại bỏ trùng lặp
-            var allUserIds = bidderIds
+            // Kết hợp seller, bidders và watchlist users, loại bỏ trùng lặp
+            var allUserIds = new[] { sellerId }
+                .Union(bidderIds)
                 .Union(watchlistUserIds)
                 .Distinct()
                 .ToList();
