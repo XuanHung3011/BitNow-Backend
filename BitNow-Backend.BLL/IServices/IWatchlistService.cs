@@ -9,5 +9,6 @@ namespace BitNow_Backend.BLL.IServices
 		Task<IEnumerable<WatchlistItemDto>> GetByUserAsync(int userId);
 		Task<WatchlistItemDto?> GetDetailAsync(int watchlistId);
 		Task<WatchlistItemDto?> GetDetailByUserAuctionAsync(int userId, int auctionId);
+		Task<IReadOnlyList<int>> GetDistinctUserIdsByAuctionAsync(int auctionId);
 	}
 }

@@ -4,6 +4,7 @@ using BitNow_Backend.DAL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BitNow_Backend.DAL.Migrations
 {
     [DbContext(typeof(BidNowDbContext))]
-    partial class BidNowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251121122055_AddPausedAtToAuction")]
+    partial class AddPausedAtToAuction
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
