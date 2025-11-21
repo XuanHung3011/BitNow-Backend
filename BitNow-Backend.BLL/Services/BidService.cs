@@ -288,6 +288,11 @@ namespace BitNow_Backend.BLL.Services
                 throw new InvalidOperationException($"Error retrieving bidding history: {ex.Message}", ex);
             }
         }
+
+        public async Task<IReadOnlyList<int>> GetDistinctBidderIdsByAuctionAsync(int auctionId)
+        {
+            return await _bidRepository.GetDistinctBidderIdsByAuctionAsync(auctionId);
+        }
     }
 }
 

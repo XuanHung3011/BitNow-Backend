@@ -22,6 +22,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public DateTime EndTime { get; set; }
 		public string Status { get; set; } = null!;
 		public int? BidCount { get; set; }
+		public DateTime? PausedAt { get; set; }
 	}
 
 	public class AuctionListItemDto
@@ -37,6 +38,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public string Status { get; set; } = null!;
 		public string DisplayStatus { get; set; } = null!; // active, scheduled, completed, suspended
 		public int? BidCount { get; set; }
+		public DateTime? PausedAt { get; set; }
 	}
 
 	public class AuctionFilterDto

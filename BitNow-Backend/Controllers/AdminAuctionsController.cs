@@ -17,6 +17,8 @@ public class AdminAuctionsController : ControllerBase
     private readonly ILogger<AdminAuctionsController> _logger;
     private readonly IHubContext<AuctionHub> _auctionHub;
     private readonly INotificationService _notificationService;
+    private readonly IBidService _bidService;
+    private readonly IWatchlistService _watchlistService;
     private static readonly string[] ValidFilterStatuses = { "active", "scheduled", "completed", "cancelled" };
     private static readonly string[] AllowedStatusUpdates = { "draft", "active", "completed", "cancelled" };
 
@@ -24,12 +26,16 @@ public class AdminAuctionsController : ControllerBase
         IAuctionService auctionService,
         ILogger<AdminAuctionsController> logger,
         IHubContext<AuctionHub> auctionHub,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IBidService bidService,
+        IWatchlistService watchlistService)
     {
         _auctionService = auctionService;
         _logger = logger;
         _auctionHub = auctionHub;
         _notificationService = notificationService;
+        _bidService = bidService;
+        _watchlistService = watchlistService;
     }
 
     /// <summary>
@@ -192,6 +198,7 @@ public class AdminAuctionsController : ControllerBase
                 var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
                 try
                 {
+                    // Gửi thông báo cho seller
                     await _notificationService.CreateNotificationAsync(new CreateNotificationDto
                     {
                         UserId = auction.SellerId,
@@ -199,6 +206,9 @@ public class AdminAuctionsController : ControllerBase
                         Message = message,
                         Link = $"/seller/auctions/{auction.Id}"
                     });
+
+                    // Gửi thông báo cho tất cả users đã tham gia đấu giá và watchlist
+                    await NotifyAuctionParticipantsAsync(id, message, "auction-suspended", $"/auction/{id}");
                 }
                 catch (Exception ex)
                 {
@@ -240,7 +250,7 @@ public class AdminAuctionsController : ControllerBase
                 return BadRequest(new { message = "Không thể tiếp tục phiên đấu giá đã kết thúc." });
             }
 
-            var updated = await _auctionService.UpdateStatusAsync(id, "active");
+            var updated = await _auctionService.ResumeAuctionAsync(id);
             if (!updated)
             {
                 return NotFound(new { message = $"Auction with ID {id} not found" });
@@ -259,13 +269,19 @@ public class AdminAuctionsController : ControllerBase
             try
             {
                 var note = string.IsNullOrWhiteSpace(request?.Reason) ? string.Empty : $"\nGhi chú: {request!.Reason!.Trim()}";
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin.{note}";
+                
+                // Gửi thông báo cho seller
                 await _notificationService.CreateNotificationAsync(new CreateNotificationDto
                 {
                     UserId = auction.SellerId,
                     Type = "auction-resumed",
-                    Message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin.{note}",
+                    Message = message,
                     Link = $"/seller/auctions/{auction.Id}"
                 });
+
+                // Gửi thông báo cho tất cả users đã tham gia đấu giá và watchlist
+                await NotifyAuctionParticipantsAsync(id, message, "auction-resumed", $"/auction/{id}");
             }
             catch (Exception ex)
             {
@@ -278,6 +294,54 @@ public class AdminAuctionsController : ControllerBase
         {
             _logger.LogError(ex, "Error resuming auction {AuctionId}", id);
             return StatusCode(500, new { message = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// Gửi thông báo cho tất cả users đã tham gia đấu giá (bidders) và users trong watchlist
+    /// </summary>
+    private async Task NotifyAuctionParticipantsAsync(int auctionId, string message, string notificationType, string link)
+    {
+        try
+        {
+            // Lấy danh sách distinct user IDs từ bidders
+            var bidderIds = await _bidService.GetDistinctBidderIdsByAuctionAsync(auctionId);
+            
+            // Lấy danh sách distinct user IDs từ watchlist
+            var watchlistUserIds = await _watchlistService.GetDistinctUserIdsByAuctionAsync(auctionId);
+            
+            // Kết hợp và loại bỏ trùng lặp
+            var allUserIds = bidderIds
+                .Union(watchlistUserIds)
+                .Distinct()
+                .ToList();
+
+            // Gửi thông báo cho từng user
+            var notificationTasks = allUserIds.Select(userId => 
+                _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                {
+                    UserId = userId,
+                    Type = notificationType,
+                    Message = message,
+                    Link = link
+                }).ContinueWith(task =>
+                {
+                    if (task.IsFaulted)
+                    {
+                        _logger.LogWarning(task.Exception, "Failed to send notification to user {UserId} for auction {AuctionId}", userId, auctionId);
+                    }
+                })
+            );
+
+            await Task.WhenAll(notificationTasks);
+            
+            _logger.LogInformation("Sent {Count} notifications for auction {AuctionId} (bidders: {BidderCount}, watchlist: {WatchlistCount})", 
+                allUserIds.Count, auctionId, bidderIds.Count, watchlistUserIds.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error notifying auction participants for auction {AuctionId}", auctionId);
+            // Không throw exception để không ảnh hưởng đến flow chính
         }
     }
 

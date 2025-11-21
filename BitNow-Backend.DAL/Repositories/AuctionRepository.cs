@@ -2,6 +2,7 @@ using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Linq;
 
 namespace BitNow_Backend.DAL.Repositories
@@ -150,6 +151,44 @@ namespace BitNow_Backend.DAL.Repositories
                 }
 
                 auction.Status = status;
+
+                // Lưu thời gian tạm dừng khi status = "cancelled"
+                if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    auction.PausedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (DbUpdateException ex)
+            {
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Database error: {innerMessage}", ex);
+            }
+        }
+
+        public async Task<bool> ResumeAuctionAsync(int id)
+        {
+            try
+            {
+                var auction = await _context.Auctions.FirstOrDefaultAsync(a => a.Id == id);
+                if (auction == null)
+                {
+                    return false;
+                }
+
+                // Kiểm tra nếu có thời gian tạm dừng, tính và cộng vào EndTime
+                if (auction.PausedAt.HasValue)
+                {
+                    var pausedDuration = DateTime.UtcNow - auction.PausedAt.Value;
+                    auction.EndTime = auction.EndTime.Add(pausedDuration);
+                }
+
+                // Cập nhật status thành active
+                auction.Status = "active";
+                // Xóa PausedAt vì auction đã được tiếp tục, không còn tạm dừng nữa
+                auction.PausedAt = null;
 
                 await _context.SaveChangesAsync();
                 return true;
