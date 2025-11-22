@@ -9,6 +9,7 @@ using StackExchange.Redis;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.FileProviders;
 using BitNow_Backend.Services;
+using BitNow_Backend.RealTime;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
