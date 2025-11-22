@@ -1,9 +1,8 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
-using BitNow_Backend.RealTime;
 using Microsoft.AspNetCore.SignalR;
 
-namespace BitNow_Backend.Services
+namespace BitNow_Backend.RealTime
 {
     public class NotificationHubService : INotificationHub
     {
