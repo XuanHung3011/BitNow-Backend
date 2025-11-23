@@ -2,6 +2,8 @@ using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
+using Microsoft.AspNetCore.SignalR;
+using BitNow_Backend.RealTime;
 
 namespace BitNow_Backend.BLL.Services
 {
@@ -9,16 +11,16 @@ namespace BitNow_Backend.BLL.Services
     {
         private readonly INotificationRepository _notificationRepository;
         private readonly IUserRepository _userRepository;
-        private readonly INotificationHub? _notificationHub;
+        private readonly IHubContext<MessageHub>? _hubContext;
 
         public NotificationService(
             INotificationRepository notificationRepository, 
             IUserRepository userRepository,
-            INotificationHub? notificationHub = null)
+            IHubContext<MessageHub>? hubContext = null)
         {
             _notificationRepository = notificationRepository;
             _userRepository = userRepository;
-            _notificationHub = notificationHub;
+            _hubContext = hubContext;
         }
 
         public async Task<IEnumerable<NotificationResponseDto>> GetNotificationsByUserIdAsync(int userId, int page = 1, int pageSize = 20)
@@ -58,11 +60,12 @@ namespace BitNow_Backend.BLL.Services
             var notificationDto = MapToNotificationResponseDto(savedNotification);
 
             // Broadcast notification real-time qua SignalR
-            if (_notificationHub != null)
+            if (_hubContext != null)
             {
                 try
                 {
-                    await _notificationHub.SendNotificationToUserAsync(dto.UserId, notificationDto);
+                    await _hubContext.Clients.Group($"user-{dto.UserId}")
+                        .SendAsync("NotificationReceived", notificationDto);
                 }
                 catch
                 {
