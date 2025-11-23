@@ -59,9 +59,6 @@ namespace BitNow_Backend.DAL.Migrations
                         .HasColumnType("int")
                         .HasColumnName("item_id");
 
-                    b.Property<DateTime?>("PausedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<int>("SellerId")
                         .HasColumnType("int")
                         .HasColumnName("seller_id");

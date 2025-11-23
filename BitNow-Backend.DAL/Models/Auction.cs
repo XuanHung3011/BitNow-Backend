@@ -28,8 +28,6 @@ public partial class Auction
     public int? WinnerId { get; set; }
 
     public DateTime? CreatedAt { get; set; }
-    public DateTime? PausedAt { get; set; }
-
 
     public virtual ICollection<AutoBid> AutoBids { get; set; } = new List<AutoBid>();
 

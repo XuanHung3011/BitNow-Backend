@@ -8,7 +8,6 @@ namespace BitNow_Backend.BLL.IServices
 		Task<IReadOnlyList<BidDto>> GetRecentBidsAsync(int auctionId, int limit);
 		Task<decimal?> GetHighestBidAsync(int auctionId);
         Task<PaginatedResultB<BiddingHistoryDto>> GetBiddingHistoryAsync(int bidderId, int page, int pageSize);
-        Task<IReadOnlyList<int>> GetDistinctBidderIdsByAuctionAsync(int auctionId);
     }
 }
 

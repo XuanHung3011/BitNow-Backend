@@ -61,11 +61,6 @@ namespace BitNow_Backend.BLL.Services
 			return w == null ? null : Map(w);
 		}
 
-		public async Task<IReadOnlyList<int>> GetDistinctUserIdsByAuctionAsync(int auctionId)
-		{
-			return await _watchlistRepository.GetDistinctUserIdsByAuctionAsync(auctionId);
-		}
-
 		private static WatchlistItemDto Map(Watchlist w)
 		{
 			return new WatchlistItemDto

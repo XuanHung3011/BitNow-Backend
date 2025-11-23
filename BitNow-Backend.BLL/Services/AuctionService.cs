@@ -42,8 +42,7 @@ namespace BitNow_Backend.BLL.Services
 				StartTime = a.StartTime,
 				EndTime = a.EndTime,
 				Status = a.Status,
-				BidCount = a.BidCount,
-				PausedAt = a.PausedAt
+				BidCount = a.BidCount
 			};
 		}
 
@@ -92,12 +91,10 @@ namespace BitNow_Backend.BLL.Services
 					CategoryName = a.Item?.Category?.Name,
 					StartingBid = a.StartingBid,
 					CurrentBid = a.CurrentBid,
-                    StartTime = a.StartTime,
 					EndTime = a.EndTime,
 					Status = a.Status ?? "",
 					DisplayStatus = displayStatus,
-					BidCount = a.BidCount ?? 0,
-					PausedAt = a.PausedAt
+					BidCount = a.BidCount ?? 0
 				};
 			}).ToList();
 
@@ -123,11 +120,6 @@ namespace BitNow_Backend.BLL.Services
             }
 
             return await _auctionRepository.UpdateStatusAsync(id, status);
-        }
-
-        public async Task<bool> ResumeAuctionAsync(int id)
-        {
-            return await _auctionRepository.ResumeAuctionAsync(id);
         }
 
         public async Task<AuctionResponseDto?> CreateAuctionAsync(CreateAuctionDto dto)

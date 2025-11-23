@@ -50,15 +50,6 @@ namespace BitNow_Backend.DAL.Repositories
                 .Where(b => b.BidderId == bidderId)
                 .CountAsync();
         }
-
-        public async Task<IReadOnlyList<int>> GetDistinctBidderIdsByAuctionAsync(int auctionId)
-        {
-            return await _ctx.Bids
-                .Where(b => b.AuctionId == auctionId)
-                .Select(b => b.BidderId)
-                .Distinct()
-                .ToListAsync();
-        }
     }
 }
 

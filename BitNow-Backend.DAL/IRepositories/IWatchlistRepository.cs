@@ -10,6 +10,5 @@ namespace BitNow_Backend.DAL.IRepositories
 		Task<Watchlist> AddAsync(Watchlist entity);
 		Task<bool> RemoveAsync(int userId, int auctionId);
 		Task<bool> ExistsAsync(int userId, int auctionId);
-		Task<IReadOnlyList<int>> GetDistinctUserIdsByAuctionAsync(int auctionId);
 	}
 }

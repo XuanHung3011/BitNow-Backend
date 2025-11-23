@@ -58,14 +58,5 @@ namespace BitNow_Backend.DAL.Repositories
 		{
 			return await _context.Watchlists.AnyAsync(w => w.UserId == userId && w.AuctionId == auctionId);
 		}
-
-		public async Task<IReadOnlyList<int>> GetDistinctUserIdsByAuctionAsync(int auctionId)
-		{
-			return await _context.Watchlists
-				.Where(w => w.AuctionId == auctionId)
-				.Select(w => w.UserId)
-				.Distinct()
-				.ToListAsync();
-		}
 	}
 }
