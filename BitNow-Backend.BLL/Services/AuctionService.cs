@@ -50,7 +50,7 @@ namespace BitNow_Backend.BLL.Services
         public async Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
 		{
 			var (auctions, totalCount) = await _auctionRepository.GetAuctionsWithFilterAsync(filter);
-			var now = DateTime.UtcNow;
+			var now = DateTime.Now;
 
 			var items = auctions.Select(a =>
 			{
@@ -165,31 +165,91 @@ namespace BitNow_Backend.BLL.Services
                 throw new InvalidOperationException("Item already has an active, draft, or scheduled auction");
             }
 
-            // Validate dates
-            if (dto.StartTime >= dto.EndTime)
+            // Convert UTC time from frontend to local time (Vietnam time UTC+7)
+            // Frontend sends UTC time in ISO format, we need to convert to local time
+            // Vietnam timezone: UTC+7
+            DateTime startTimeLocal;
+            DateTime endTimeLocal;
+
+            try
+            {
+                // Try to get Vietnam timezone
+                TimeZoneInfo vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time"); // Vietnam timezone on Windows
+                
+                // Check if dto.StartTime is UTC (Kind = Utc) or Unspecified
+                if (dto.StartTime.Kind == DateTimeKind.Utc)
+                {
+                    // Convert from UTC to Vietnam local time
+                    startTimeLocal = TimeZoneInfo.ConvertTimeFromUtc(dto.StartTime, vietnamTimeZone);
+                    endTimeLocal = TimeZoneInfo.ConvertTimeFromUtc(dto.EndTime, vietnamTimeZone);
+                }
+                else if (dto.StartTime.Kind == DateTimeKind.Unspecified)
+                {
+                    // Assume it's UTC if unspecified (from JSON deserialization of ISO string)
+                    // JSON deserializer treats ISO strings with 'Z' as UTC but sets Kind to Unspecified
+                    startTimeLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(dto.StartTime, DateTimeKind.Utc), vietnamTimeZone);
+                    endTimeLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(dto.EndTime, DateTimeKind.Utc), vietnamTimeZone);
+                }
+                else
+                {
+                    // Already local time, use as is
+                    startTimeLocal = dto.StartTime;
+                    endTimeLocal = dto.EndTime;
+                }
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Fallback: Use UTC+7 offset directly if timezone not found
+                // This works on both Windows and Linux
+                const int vietnamOffsetHours = 7;
+                TimeSpan vietnamOffset = TimeSpan.FromHours(vietnamOffsetHours);
+                
+                if (dto.StartTime.Kind == DateTimeKind.Utc)
+                {
+                    startTimeLocal = dto.StartTime.Add(vietnamOffset);
+                    endTimeLocal = dto.EndTime.Add(vietnamOffset);
+                }
+                else if (dto.StartTime.Kind == DateTimeKind.Unspecified)
+                {
+                    // Assume UTC and add offset
+                    startTimeLocal = DateTime.SpecifyKind(dto.StartTime, DateTimeKind.Utc).Add(vietnamOffset);
+                    endTimeLocal = DateTime.SpecifyKind(dto.EndTime, DateTimeKind.Utc).Add(vietnamOffset);
+                }
+                else
+                {
+                    startTimeLocal = dto.StartTime;
+                    endTimeLocal = dto.EndTime;
+                }
+            }
+
+            // Validate dates using local time (Vietnam time)
+            var nowLocal = DateTime.Now; // This is already local time (Vietnam time)
+
+            if (startTimeLocal >= endTimeLocal)
             {
                 throw new ArgumentException("Start time must be before end time");
             }
 
-            if (dto.StartTime < DateTime.UtcNow)
+            if (startTimeLocal < nowLocal)
             {
                 throw new ArgumentException("Start time cannot be in the past");
             }
 
             // Create auction with active status (auction starts immediately)
             // Only set foreign key IDs, not navigation properties
+            // Store times as local time (Vietnam time) - same as DateTime.Now
             var auction = new Auction
             {
                 ItemId = dto.ItemId,
                 SellerId = dto.SellerId,
                 StartingBid = dto.StartingBid,
                 BuyNowPrice = dto.BuyNowPrice,
-                StartTime = dto.StartTime,
-                EndTime = dto.EndTime,
+                StartTime = startTimeLocal, // Store as local time (Vietnam time)
+                EndTime = endTimeLocal, // Store as local time (Vietnam time)
                 Status = "active", // Set to active immediately when created
                 BidCount = 0,
                 CurrentBid = null,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.Now, // Local time (Vietnam time)
                 WinnerId = null
             };
 
