@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.FileProviders;
+using BitNow_Backend.Services;
+using BitNow_Backend.RealTime;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -32,6 +34,8 @@ builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
@@ -41,6 +45,13 @@ builder.Services.AddScoped<BitNow_Backend.Services.IFileUploadService, BitNow_Ba
 // Bids
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IBidService, BidService>();
+// Auto Bids
+builder.Services.AddScoped<IAutoBidRepository, AutoBidRepository>();
+builder.Services.AddScoped<IAutoBidService, AutoBidService>();
+// Bid Notification
+builder.Services.AddScoped<BitNow_Backend.BLL.IServices.IBidNotificationService, BitNow_Backend.Services.BidNotificationService>();
+// Notification Hub Service
+builder.Services.AddScoped<INotificationHub, NotificationHubService>();
 // Admin Stats
 builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
 // Platform Analytics

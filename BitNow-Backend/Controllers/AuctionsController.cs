@@ -105,9 +105,8 @@ namespace BitNow_Backend.Controllers
 			try
 			{
 				var result = await _bidService.PlaceBidAsync(id, request.BidderId, request.Amount);
-				// broadcast to group
-				await _hubContext.Clients.Group($"auction-{id}")
-					.SendAsync("BidPlaced", result);
+				// Broadcast đã được xử lý trong BidService thông qua IBidNotificationService
+				// Không cần broadcast lại ở đây để tránh duplicate
 				return Ok(result);
 			}
 			catch (InvalidOperationException ex)

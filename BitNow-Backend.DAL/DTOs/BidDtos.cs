@@ -45,6 +45,23 @@ namespace BitNow_Backend.DAL.DTOs
         public int Page { get; set; }
         public int PageSize { get; set; }
     }
+
+    public class AutoBidDto
+    {
+        public int Id { get; set; }
+        public int AuctionId { get; set; }
+        public int UserId { get; set; }
+        public decimal MaxAmount { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? CreatedAt { get; set; }
+    }
+
+    public class CreateAutoBidDto
+    {
+        public int AuctionId { get; set; }
+        public int UserId { get; set; }
+        public decimal MaxAmount { get; set; }
+    }
 }
 
 

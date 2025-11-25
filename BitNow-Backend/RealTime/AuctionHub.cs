@@ -20,26 +20,43 @@ namespace BitNow_Backend.RealTime
 			await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"auction-{auctionId}");
 		}
 
+		/// <summary>
+		/// Join admin dashboard channel for real-time stats updates
+		/// </summary>
 		public Task JoinAdminChannel()
 		{
 			return Groups.AddToGroupAsync(Context.ConnectionId, AdminDashboardGroup);
 		}
 
+		/// <summary>
+		/// Leave admin dashboard channel
+		/// </summary>
 		public Task LeaveAdminChannel()
 		{
 			return Groups.RemoveFromGroupAsync(Context.ConnectionId, AdminDashboardGroup);
 		}
 
+		/// <summary>
+		/// Join admin section group for real-time updates (stats, pending items, analytics, etc.)
+		/// </summary>
+		/// <param name="section">Admin section name: "stats", "pending", "auctions", "analytics"</param>
 		public Task JoinAdminSection(string section)
 		{
 			return Groups.AddToGroupAsync(Context.ConnectionId, GetAdminGroup(section));
 		}
 
+		/// <summary>
+		/// Leave admin section group
+		/// </summary>
+		/// <param name="section">Admin section name</param>
 		public Task LeaveAdminSection(string section)
 		{
 			return Groups.RemoveFromGroupAsync(Context.ConnectionId, GetAdminGroup(section));
 		}
 
+		/// <summary>
+		/// Map admin section name to group name
+		/// </summary>
 		private static string GetAdminGroup(string? section)
 		{
 			return section?.ToLower() switch

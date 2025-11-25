@@ -16,14 +16,26 @@ public class AdminAuctionsController : ControllerBase
     private readonly IAuctionService _auctionService;
     private readonly ILogger<AdminAuctionsController> _logger;
     private readonly IHubContext<AuctionHub> _auctionHub;
+    private readonly INotificationService _notificationService;
+    private readonly IBidService _bidService;
+    private readonly IWatchlistService _watchlistService;
     private static readonly string[] ValidFilterStatuses = { "active", "scheduled", "completed", "cancelled" };
     private static readonly string[] AllowedStatusUpdates = { "draft", "active", "completed", "cancelled" };
 
-    public AdminAuctionsController(IAuctionService auctionService, ILogger<AdminAuctionsController> logger, IHubContext<AuctionHub> auctionHub)
+    public AdminAuctionsController(
+        IAuctionService auctionService,
+        ILogger<AdminAuctionsController> logger,
+        IHubContext<AuctionHub> auctionHub,
+        INotificationService notificationService,
+        IBidService bidService,
+        IWatchlistService watchlistService)
     {
         _auctionService = auctionService;
         _logger = logger;
         _auctionHub = auctionHub;
+        _notificationService = notificationService;
+        _bidService = bidService;
+        _watchlistService = watchlistService;
     }
 
     /// <summary>
@@ -146,6 +158,25 @@ public class AdminAuctionsController : ControllerBase
                 return BadRequest(new { message = $"Status must be one of: {string.Join(", ", AllowedStatusUpdates)}" });
             }
 
+            var auction = await _auctionService.GetDetailAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 10)
+                {
+                    return BadRequest(new { message = "Nguyên nhân tạm dừng phải có ít nhất 10 ký tự." });
+                }
+
+                if (!string.Equals(request.AdminSignature?.Trim(), "Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { message = "Bạn phải nhập chính xác chữ ký 'Admin' để xác nhận." });
+                }
+            }
+
             var updated = await _auctionService.UpdateStatusAsync(id, normalizedStatus);
             if (!updated)
             {
@@ -161,6 +192,23 @@ public class AdminAuctionsController : ControllerBase
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
             await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
             await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+            
+            // Broadcast cho auction group để frontend có thể real-time update
+            await _auctionHub.Clients.Group($"auction-{id}").SendAsync("AuctionStatusUpdated", payload);
+
+            if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
+                try
+                {
+                    // Gửi thông báo cho seller, bidders và watchlist users
+                    await NotifyAuctionParticipantsAsync(id, auction.SellerId, message, "auction-suspended", $"/auction/{id}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create suspension notification for auction {AuctionId}", auction.Id);
+                }
+            }
 
             return NoContent();
         }
@@ -175,9 +223,127 @@ public class AdminAuctionsController : ControllerBase
         }
     }
 
+    [HttpPost("{id}/resume")]
+    public async Task<IActionResult> ResumeAuction(int id, [FromBody] ResumeAuctionRequest? request)
+    {
+        try
+        {
+            var auction = await _auctionService.GetDetailAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            if (!string.Equals(auction.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Chỉ có thể tiếp tục các phiên đấu giá đang bị tạm dừng." });
+            }
+
+            if (auction.EndTime <= DateTime.UtcNow)
+            {
+                return BadRequest(new { message = "Không thể tiếp tục phiên đấu giá đã kết thúc." });
+            }
+
+            var updated = await _auctionService.ResumeAuctionAsync(id);
+            if (!updated)
+            {
+                return NotFound(new { message = $"Auction with ID {id} not found" });
+            }
+
+            var payload = new
+            {
+                auctionId = id,
+                status = "active",
+                timestamp = DateTime.UtcNow
+            };
+            await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
+            await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+            await _auctionHub.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+            
+            // Broadcast cho auction group để frontend có thể real-time update
+            await _auctionHub.Clients.Group($"auction-{id}").SendAsync("AuctionStatusUpdated", payload);
+
+            try
+            {
+                var note = string.IsNullOrWhiteSpace(request?.Reason) ? string.Empty : $"\nGhi chú: {request!.Reason!.Trim()}";
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin.{note}";
+                
+                // Gửi thông báo cho seller, bidders và watchlist users
+                await NotifyAuctionParticipantsAsync(id, auction.SellerId, message, "auction-resumed", $"/auction/{id}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create resume notification for auction {AuctionId}", auction.Id);
+            }
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resuming auction {AuctionId}", id);
+            return StatusCode(500, new { message = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// Gửi thông báo cho seller, tất cả users đã tham gia đấu giá (bidders) và users trong watchlist
+    /// </summary>
+    private async Task NotifyAuctionParticipantsAsync(int auctionId, int sellerId, string message, string notificationType, string link)
+    {
+        try
+        {
+            // Lấy danh sách distinct user IDs từ bidders
+            var bidderIds = await _bidService.GetDistinctBidderIdsByAuctionAsync(auctionId);
+            
+            // Lấy danh sách distinct user IDs từ watchlist
+            var watchlistUserIds = await _watchlistService.GetDistinctUserIdsByAuctionAsync(auctionId);
+            
+            // Kết hợp seller, bidders và watchlist users, loại bỏ trùng lặp
+            var allUserIds = new[] { sellerId }
+                .Union(bidderIds)
+                .Union(watchlistUserIds)
+                .Distinct()
+                .ToList();
+
+            // Gửi thông báo cho từng user
+            var notificationTasks = allUserIds.Select(userId => 
+                _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                {
+                    UserId = userId,
+                    Type = notificationType,
+                    Message = message,
+                    Link = link
+                }).ContinueWith(task =>
+                {
+                    if (task.IsFaulted)
+                    {
+                        _logger.LogWarning(task.Exception, "Failed to send notification to user {UserId} for auction {AuctionId}", userId, auctionId);
+                    }
+                })
+            );
+
+            await Task.WhenAll(notificationTasks);
+            
+            _logger.LogInformation("Sent {Count} notifications for auction {AuctionId} (bidders: {BidderCount}, watchlist: {WatchlistCount})", 
+                allUserIds.Count, auctionId, bidderIds.Count, watchlistUserIds.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error notifying auction participants for auction {AuctionId}", auctionId);
+            // Không throw exception để không ảnh hưởng đến flow chính
+        }
+    }
+
     public class UpdateAuctionStatusRequest
     {
         public string Status { get; set; } = string.Empty;
+        public string? Reason { get; set; }
+        public string? AdminSignature { get; set; }
+    }
+
+    public class ResumeAuctionRequest
+    {
+        public string? Reason { get; set; }
     }
 }
 

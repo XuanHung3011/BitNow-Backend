@@ -1,7 +1,9 @@
 using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using BitNow_Backend.Services;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using Microsoft.AspNetCore.SignalR;
@@ -16,13 +18,23 @@ namespace BitNow_Backend.Controllers
         private readonly IItemService _itemService;
         private readonly ILogger<ItemsController> _logger;
         private readonly IFileUploadService _fileUploadService;
+        private readonly INotificationService _notificationService;
+        private readonly BidNowDbContext _context;
         private readonly IHubContext<AuctionHub> _auctionHub;
 
-        public ItemsController(IItemService itemService, IFileUploadService fileUploadService, ILogger<ItemsController> logger, IHubContext<AuctionHub> auctionHub)
+        public ItemsController(
+            IItemService itemService, 
+            IFileUploadService fileUploadService, 
+            ILogger<ItemsController> logger,
+            INotificationService notificationService,
+            BidNowDbContext context,
+            IHubContext<AuctionHub> auctionHub)
         {
             _itemService = itemService;
             _fileUploadService = fileUploadService;
             _logger = logger;
+            _notificationService = notificationService;
+            _context = context;
             _auctionHub = auctionHub;
         }
 
@@ -103,6 +115,85 @@ namespace BitNow_Backend.Controllers
 
                 _logger.LogInformation("Item created successfully with ID: {ItemId}", result.Id);
 
+                // Tạo thông báo cho tất cả admin users về sản phẩm mới cần phê duyệt
+                try
+                {
+                    _logger.LogInformation("Searching for admin users to notify about new item {ItemId}", result.Id);
+                    
+                    // Query trực tiếp từ UserRoles table và join với Users
+                    var adminUserIds = await _context.UserRoles
+                        .Where(ur => ur.Role.ToLower() == "admin")
+                        .Select(ur => ur.UserId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    _logger.LogInformation("Found {Count} admin user IDs from UserRoles table", adminUserIds.Count);
+
+                    if (adminUserIds.Count == 0)
+                    {
+                        _logger.LogWarning("No admin users found in UserRoles table for notification about item {ItemId}", result.Id);
+                    }
+                    else
+                    {
+                        // Lấy thông tin đầy đủ của admin users (chỉ những user active)
+                        var adminUsers = await _context.Users
+                            .Where(u => adminUserIds.Contains(u.Id) && (u.IsActive == null || u.IsActive == true))
+                            .ToListAsync();
+
+                        _logger.LogInformation("Found {Count} active admin users for notification about item {ItemId}", adminUsers.Count, result.Id);
+
+                        if (adminUsers.Count == 0)
+                        {
+                            _logger.LogWarning("No active admin users found to notify about new item {ItemId}", result.Id);
+                        }
+
+                        var notificationCount = 0;
+                        foreach (var admin in adminUsers)
+                        {
+                            try
+                            {
+                                // Truncate message nếu quá dài (max 500 chars)
+                                var message = $"Sản phẩm mới '{dto.Title}' cần phê duyệt từ seller ID {dto.SellerId}";
+                                if (message.Length > 500)
+                                {
+                                    message = message.Substring(0, 497) + "...";
+                                }
+
+                                _logger.LogInformation("Attempting to create notification for admin {AdminId} (Email: {Email}) about new item {ItemId}", 
+                                    admin.Id, admin.Email, result.Id);
+
+                                var notificationDto = new CreateNotificationDto
+                                {
+                                    UserId = admin.Id,
+                                    Type = "item_pending",
+                                    Message = message,
+                                    Link = $"/admin?tab=pending"
+                                };
+
+                                var createdNotification = await _notificationService.CreateNotificationAsync(notificationDto);
+
+                                notificationCount++;
+                                _logger.LogInformation("Successfully created notification {NotificationId} for admin {AdminId} (Email: {Email}) about new item {ItemId}", 
+                                    createdNotification.Id, admin.Id, admin.Email, result.Id);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Failed to create notification for admin {AdminId} (Email: {Email}) about item {ItemId}. Error: {Error}", 
+                                    admin.Id, admin.Email, result.Id, ex.ToString());
+                            }
+                        }
+
+                        _logger.LogInformation("Successfully created {Count}/{Total} notifications for admin users about new item {ItemId}", 
+                            notificationCount, adminUsers.Count, result.Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log error nhưng không fail request nếu notification creation fails
+                    _logger.LogError(ex, "Failed to create notifications for admins about item {ItemId}. Error: {Error}", result.Id, ex.ToString());
+                }
+
+                // Gửi SignalR update để refresh admin dashboard real-time
                 await NotifyPendingAndDashboardAsync(result.Id, "created");
 
                 return Ok(result); // Use Ok instead of CreatedAtAction to ensure response is returned
@@ -224,12 +315,53 @@ namespace BitNow_Backend.Controllers
         {
             try
             {
+                // Lấy thông tin item trước khi approve để lấy sellerId và title
+                var item = await _itemService.GetByIdAsync(id);
+                if (item == null)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
                 var result = await _itemService.ApproveItemAsync(id);
                 if (!result)
                 {
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
 
+                // Tạo thông báo cho seller về việc sản phẩm được phê duyệt
+                try
+                {
+                    if (item.SellerId > 0)
+                    {
+                        // Truncate message nếu quá dài (max 500 chars)
+                        var message = $"Sản phẩm '{item.Title}' của bạn đã được phê duyệt";
+                        if (message.Length > 500)
+                        {
+                            message = message.Substring(0, 497) + "...";
+                        }
+
+                        await _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                        {
+                            UserId = item.SellerId,
+                            Type = "item_approved",
+                            Message = message,
+                            Link = $"/seller/items"
+                        });
+
+                        _logger.LogInformation("Created notification for seller {SellerId} about approved item {ItemId} (Title: {Title})", item.SellerId, id, item.Title);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Cannot create notification for approved item {ItemId}: SellerId is invalid ({SellerId})", id, item.SellerId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log error nhưng không fail request nếu notification creation fails
+                    _logger.LogError(ex, "Failed to create notification for seller {SellerId} about approved item {ItemId}: {Message}", item.SellerId, id, ex.Message);
+                }
+
+                // Gửi SignalR update để refresh admin dashboard real-time
                 await NotifyPendingAndDashboardAsync(id, "approved");
 
                 return Ok(new { message = "Item approved successfully" });
@@ -250,12 +382,53 @@ namespace BitNow_Backend.Controllers
         {
             try
             {
+                // Lấy thông tin item trước khi reject để lấy sellerId và title
+                var item = await _itemService.GetByIdAsync(id);
+                if (item == null)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
                 var result = await _itemService.RejectItemAsync(id);
                 if (!result)
                 {
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
 
+                // Tạo thông báo cho seller về việc sản phẩm bị từ chối
+                try
+                {
+                    if (item.SellerId > 0)
+                    {
+                        // Truncate message nếu quá dài (max 500 chars)
+                        var message = $"Sản phẩm '{item.Title}' của bạn đã bị từ chối";
+                        if (message.Length > 500)
+                        {
+                            message = message.Substring(0, 497) + "...";
+                        }
+
+                        await _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                        {
+                            UserId = item.SellerId,
+                            Type = "item_rejected",
+                            Message = message,
+                            Link = $"/seller/items"
+                        });
+
+                        _logger.LogInformation("Created notification for seller {SellerId} about rejected item {ItemId} (Title: {Title})", item.SellerId, id, item.Title);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Cannot create notification for rejected item {ItemId}: SellerId is invalid ({SellerId})", id, item.SellerId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log error nhưng không fail request nếu notification creation fails
+                    _logger.LogError(ex, "Failed to create notification for seller {SellerId} about rejected item {ItemId}: {Message}", item.SellerId, id, ex.Message);
+                }
+
+                // Gửi SignalR update để refresh admin dashboard real-time
                 await NotifyPendingAndDashboardAsync(id, "rejected");
 
                 return Ok(new { message = "Item rejected successfully" });

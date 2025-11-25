@@ -10,6 +10,7 @@ namespace BitNow_Backend.DAL.IRepositories
 		Task<IReadOnlyList<Bid>> GetRecentByAuctionAsync(int auctionId, int limit);
         Task<IReadOnlyList<Bid>> GetBidsByBidderAsync(int bidderId, int skip, int take);
         Task<int> GetTotalBidCountByBidderAsync(int bidderId);
+        Task<IReadOnlyList<int>> GetDistinctBidderIdsByAuctionAsync(int auctionId);
     }
 }
 
