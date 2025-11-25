@@ -16,6 +16,10 @@ namespace BitNow_Backend.BLL.Services
         private readonly IPineconeService _pineconeService;
         private readonly ILogger<RecommendationService> _logger;
 
+        // Ngưỡng điểm tương đồng tối thiểu (0.0 - 1.0)
+        // Items có score < threshold sẽ bị loại bỏ
+        private const float SIMILARITY_THRESHOLD = 0.5f;
+
         public RecommendationService(
             IItemService itemService,
             IBidService bidService,
@@ -78,18 +82,31 @@ namespace BitNow_Backend.BLL.Services
             // Chuyển textbuyer thành embedding vector
             var queryVector = await _embeddingService.GenerateEmbeddingAsync(textbuyer, cancellationToken);
 
-            // Tìm kiếm vector tương đồng trong Pinecone (top 4)
-            var topK = Math.Min(limit, 4);
-            var similarResults = await _pineconeService.QuerySimilarAsync(queryVector, topK, cancellationToken: cancellationToken);
+            // Tìm kiếm nhiều hơn để có đủ items sau khi filter theo threshold
+            var searchLimit = Math.Min(limit, 20);
+            var similarResults = await _pineconeService.QuerySimilarAsync(queryVector, searchLimit, cancellationToken: cancellationToken);
 
-            if (!similarResults.Any())
+            // ✅ LỌC THEO THRESHOLD: Chỉ lấy items có score >= SIMILARITY_THRESHOLD
+            var filteredResults = similarResults
+                .Where(r => r.score >= SIMILARITY_THRESHOLD)
+                .ToList();
+
+            _logger.LogInformation(
+                "User {UserId}: Found {TotalResults} similar vectors, {FilteredCount} passed threshold {Threshold}",
+                userId, similarResults.Count, filteredResults.Count, SIMILARITY_THRESHOLD);
+
+            // Nếu không có kết quả phù hợp (score cao), trả về empty list
+            if (!filteredResults.Any())
             {
-                _logger.LogWarning("No similar vectors found for user {UserId} in Pinecone.", userId);
-                throw new InvalidOperationException($"No similar vectors found for user {userId}. Please ensure that active auctions have been synced to Pinecone.");
+                _logger.LogWarning(
+                    "User {UserId}: No items with similarity score >= {Threshold}. Returning empty recommendations.",
+                    userId, SIMILARITY_THRESHOLD);
+
+                return Enumerable.Empty<ItemResponseDto>();
             }
 
-            // Lấy auction IDs từ kết quả tìm kiếm
-            var auctionIds = similarResults
+            // Lấy auction IDs từ kết quả đã lọc
+            var auctionIds = filteredResults
                 .Select(r => r.id.Replace("auction_", ""))
                 .Where(id => int.TryParse(id, out _))
                 .Select(int.Parse)
@@ -100,19 +117,12 @@ namespace BitNow_Backend.BLL.Services
                 .Where(i => i.AuctionId.HasValue && auctionIds.Contains(i.AuctionId.Value))
                 .ToList();
 
-            // Nếu không đủ items, thêm các items ngẫu nhiên từ candidate pool
-            if (recommendedItems.Count < limit)
-            {
-                var remainingIds = new HashSet<int>(recommendedItems.Select(i => i.Id));
-                var additionalItems = candidateItems
-                    .Where(i => !remainingIds.Contains(i.Id))
-                    .OrderBy(_ => new Random(userId).Next())
-                    .Take(limit - recommendedItems.Count);
-                recommendedItems.AddRange(additionalItems);
-            }
+            // Chỉ trả về các items thực sự phù hợp, không fill bằng random
+            _logger.LogInformation(
+                "User {UserId}: Returning {Count} recommended items (requested: {Limit})",
+                userId, recommendedItems.Count, limit);
 
-            // Giới hạn số lượng theo limit
-            return recommendedItems.Take(limit).ToList();
+            return recommendedItems;
         }
 
         /// <summary>
