@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitNow-Backend.DAL", "BitNo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitNow-Backend.BLL", "BitNow-Backend.BLL\BitNow-Backend.BLL.csproj", "{A7BD3811-5BB6-4C01-B245-30E015D1D197}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitNow-Backend.Tests", "BitNow-Backend.Tests\BitNow-Backend.Tests.csproj", "{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{A7BD3811-5BB6-4C01-B245-30E015D1D197}.Release|x64.Build.0 = Release|Any CPU
 		{A7BD3811-5BB6-4C01-B245-30E015D1D197}.Release|x86.ActiveCfg = Release|Any CPU
 		{A7BD3811-5BB6-4C01-B245-30E015D1D197}.Release|x86.Build.0 = Release|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Debug|x64.Build.0 = Debug|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Debug|x86.Build.0 = Debug|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Release|x64.ActiveCfg = Release|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Release|x64.Build.0 = Release|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Release|x86.ActiveCfg = Release|Any CPU
+		{5D4B1AEC-D716-46AB-8D76-C022A150F1AD}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
