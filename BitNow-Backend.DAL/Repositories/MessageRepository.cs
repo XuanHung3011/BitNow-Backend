@@ -78,6 +78,18 @@ namespace BitNow_Backend.DAL.Repositories
 				.ToListAsync();
 		}
 
+		public async Task<IEnumerable<Message>> GetMessagesByAuctionAsync(int auctionId, int limit)
+		{
+			var normalizedLimit = limit <= 0 ? 100 : Math.Min(limit, 200);
+
+			return await _context.Messages
+				.Where(m => m.AuctionId == auctionId)
+				.OrderBy(m => m.SentAt)
+				.Take(normalizedLimit)
+				.AsNoTracking()
+				.ToListAsync();
+		}
+
 		public async Task<Message> AddAsync(Message message)
 		{
 			message.SentAt = DateTime.UtcNow;
