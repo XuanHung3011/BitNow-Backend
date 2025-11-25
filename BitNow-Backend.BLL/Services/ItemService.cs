@@ -159,7 +159,7 @@ namespace BitNow_Backend.BLL.Services
                 Location = dto.Location,
                 BasePrice = dto.BasePrice,
                 Status = "pending",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             var createdItem = await _itemRepository.CreateAsync(item);
