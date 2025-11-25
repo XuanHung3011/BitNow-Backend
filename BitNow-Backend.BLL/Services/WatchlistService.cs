@@ -74,8 +74,10 @@ namespace BitNow_Backend.BLL.Services
 				CurrentBid = w.Auction.CurrentBid,
 				BuyNowPrice = w.Auction.BuyNowPrice,
 				EndTime = w.Auction.EndTime,
-				Status = w.Auction.Status
-			};
+				Status = w.Auction.Status,
+                CategoryName = w.Auction.Item.Category?.Name,
+                ItemImages = w.Auction.Item.Images
+            };
 		}
 	}
 }

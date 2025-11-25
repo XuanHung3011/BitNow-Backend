@@ -1,4 +1,5 @@
 ﻿using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.BLL.Services;
 using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,18 +10,21 @@ namespace BitNow_Backend.Controllers
     public class RecommendationsController : ControllerBase
     {
         private readonly IRecommendationService _recommendationService;
+        private readonly IVectorSyncService _vectorSyncService;
         private readonly ILogger<RecommendationsController> _logger;
 
         public RecommendationsController(
             IRecommendationService recommendationService,
+            IVectorSyncService vectorSyncService,
             ILogger<RecommendationsController> logger)
         {
             _recommendationService = recommendationService;
+            _vectorSyncService = vectorSyncService;
             _logger = logger;
         }
 
         /// <summary>
-        /// API gợi ý "Dành riêng cho bạn" cho người dùng, sử dụng OpenAI + dữ liệu hệ thống.
+        /// API gợi ý "Dành riêng cho bạn" cho người dùng, sử dụng vector similarity search với Pinecone.
         /// </summary>
         /// <param name="userId">Id người dùng</param>
         /// <param name="limit">Số lượng item cần gợi ý</param>
@@ -41,10 +45,54 @@ namespace BitNow_Backend.Controllers
                 var items = await _recommendationService.GetPersonalizedItemsAsync(userId, limit, cancellationToken);
                 return Ok(items);
             }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid request for recommendations: {Message}", ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Error getting personalized recommendations for user {UserId}: {Message}", userId, ex.Message);
+                return StatusCode(500, new { message = ex.Message, error = "Recommendation service error" });
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting personalized recommendations for user {UserId}", userId);
-                return StatusCode(500, new { message = "Internal server error" });
+                _logger.LogError(ex, "Unexpected error getting personalized recommendations for user {UserId}", userId);
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+        [HttpPost("sync/active-auctions")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> SyncActiveAuctions(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _vectorSyncService.SyncActiveAuctionsAsync(cancellationToken);
+                return Ok(new { message = "Successfully synced active auctions to Pinecone" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing active auctions");
+                return StatusCode(500, new { message = "Sync failed", error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Xóa các auctions đã hết hạn khỏi Pinecone
+        /// </summary>
+        [HttpPost("sync/remove-expired")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> RemoveExpiredAuctions(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _vectorSyncService.RemoveExpiredAuctionsAsync(cancellationToken);
+                return Ok(new { message = "Successfully removed expired auctions from Pinecone" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing expired auctions");
+                return StatusCode(500, new { message = "Remove failed", error = ex.Message });
             }
         }
     }

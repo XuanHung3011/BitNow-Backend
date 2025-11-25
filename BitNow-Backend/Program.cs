@@ -47,11 +47,17 @@ builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
 
-// AI Recommendations
+// AI Recommendations - Vector-based
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IPineconeService, PineconeService>();
+builder.Services.AddScoped<IVectorSyncService, VectorSyncService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 
-// HttpClient (dùng cho OpenAI)
-builder.Services.AddHttpClient("OpenAI");
+// HttpClient for LM Studio (local embedding service)
+builder.Services.AddHttpClient("LMStudio");
+
+// HttpClient for Pinecone
+builder.Services.AddHttpClient("Pinecone");
 
 
 // Add services to the container.
