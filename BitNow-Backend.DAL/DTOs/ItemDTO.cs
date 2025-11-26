@@ -90,4 +90,9 @@ namespace BitNow_Backend.DAL.DTOs
         public decimal BasePrice { get; set; }
         // Images will be handled separately as IFormFile
     }
+
+    public class RejectItemDto
+    {
+        public string Reason { get; set; } = null!;
+    }
 }
