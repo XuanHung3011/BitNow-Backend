@@ -83,7 +83,7 @@ Hiện tại project có **53 tests** cho các controllers:
 ## Lưu ý
 
 - **ItemsController**: Chưa có tests do conflict namespace với IFileUploadService (có trong cả API và BLL projects). Có thể cần refactor để giải quyết vấn đề này.
-
+- **Đã giải quyết vấn đề trên (xoá IFileUploadService ở BLL projects)
 ## Best Practices
 
 1. **Arrange-Act-Assert (AAA)**: Tất cả tests đều tuân theo pattern AAA
