@@ -58,6 +58,18 @@ public partial class User
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 
     public virtual ICollection<Watchlist> Watchlists { get; set; } = new List<Watchlist>();
+
+    public virtual ICollection<SearchKeyword> SearchKeywords { get; set; } = new List<SearchKeyword>();
+
+    public virtual ICollection<Order> OrdersAsBuyer { get; set; } = new List<Order>();
+
+    public virtual ICollection<Order> OrdersAsSeller { get; set; } = new List<Order>();
+
+    public virtual ICollection<Dispute> DisputesAsBuyer { get; set; } = new List<Dispute>();
+
+    public virtual ICollection<Dispute> DisputesAsSeller { get; set; } = new List<Dispute>();
+
+    public virtual ICollection<Dispute> DisputesResolved { get; set; } = new List<Dispute>();
 }
 
 

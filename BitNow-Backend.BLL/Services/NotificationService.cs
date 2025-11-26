@@ -66,7 +66,7 @@ namespace BitNow_Backend.BLL.Services
                 }
                 catch
                 {
-                    // Silently fail - broadcast không thành công không ảnh hưởng đến việc tạo notification
+                    notificationDto.Message = "Notification created but real-time delivery failed";
                 }
             }
 

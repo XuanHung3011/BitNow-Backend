@@ -4,6 +4,7 @@ using BitNow_Backend.DAL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BitNow_Backend.DAL.Migrations
 {
     [DbContext(typeof(BidNowDbContext))]
-    partial class BidNowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251126091738_AddSearchKeywords")]
+    partial class AddSearchKeywords
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -365,87 +368,6 @@ namespace BitNow_Backend.DAL.Migrations
                     b.ToTable("ContactMessages");
                 });
 
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Dispute", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AdminNotes")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("admin_notes");
-
-                    b.Property<int>("BuyerId")
-                        .HasColumnType("int")
-                        .HasColumnName("buyer_id");
-
-                    b.Property<DateTime?>("ClosedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("closed_at");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("(sysutcdatetime())");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("description");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int")
-                        .HasColumnName("order_id");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
-                        .HasColumnName("reason");
-
-                    b.Property<string>("Resolution")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("resolution");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("resolved_at");
-
-                    b.Property<int?>("ResolvedBy")
-                        .HasColumnType("int")
-                        .HasColumnName("resolved_by");
-
-                    b.Property<int>("SellerId")
-                        .HasColumnType("int")
-                        .HasColumnName("seller_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("status");
-
-                    b.HasKey("Id")
-                        .HasName("PK__Disputes__3213E83F");
-
-                    b.HasIndex("BuyerId");
-
-                    b.HasIndex("ResolvedBy");
-
-                    b.HasIndex("SellerId");
-
-                    b.HasIndex(new[] { "OrderId" }, "UQ__Disputes__order_id")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "Status" }, "idx_disputes_status");
-
-                    b.ToTable("Disputes", (string)null);
-                });
-
             modelBuilder.Entity("BitNow_Backend.DAL.Models.EmailVerification", b =>
                 {
                     b.Property<int>("Id")
@@ -683,165 +605,6 @@ namespace BitNow_Backend.DAL.Migrations
                     b.HasIndex(new[] { "UserId" }, "idx_notifications_user");
 
                     b.ToTable("Notifications");
-                });
-
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Order", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AuctionId")
-                        .HasColumnType("int")
-                        .HasColumnName("auction_id");
-
-                    b.Property<int>("BuyerId")
-                        .HasColumnType("int")
-                        .HasColumnName("buyer_id");
-
-                    b.Property<string>("CancelReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
-                        .HasColumnName("cancel_reason");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("cancelled_at");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("(sysutcdatetime())");
-
-                    b.Property<decimal>("FinalPrice")
-                        .HasColumnType("decimal(18, 2)")
-                        .HasColumnName("final_price");
-
-                    b.Property<string>("OrderStatus")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("order_status");
-
-                    b.Property<int>("SellerId")
-                        .HasColumnType("int")
-                        .HasColumnName("seller_id");
-
-                    b.Property<DateTime?>("ShippedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("shipped_at");
-
-                    b.Property<string>("ShippingAddress")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
-                        .HasColumnName("shipping_address");
-
-                    b.Property<string>("ShippingCompany")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)")
-                        .HasColumnName("shipping_company");
-
-                    b.Property<string>("TrackingNumber")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("tracking_number");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("PK__Orders__3213E83F");
-
-                    b.HasIndex(new[] { "AuctionId" }, "idx_orders_auction");
-
-                    b.HasIndex(new[] { "BuyerId" }, "idx_orders_buyer");
-
-                    b.HasIndex(new[] { "SellerId" }, "idx_orders_seller");
-
-                    b.HasIndex(new[] { "OrderStatus" }, "idx_orders_status");
-
-                    b.ToTable("Orders", (string)null);
-                });
-
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Payment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18, 2)")
-                        .HasColumnName("amount");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("(sysutcdatetime())");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)")
-                        .HasColumnName("notes");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int")
-                        .HasColumnName("order_id");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("paid_at");
-
-                    b.Property<string>("PaymentMethod")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("payment_method");
-
-                    b.Property<string>("PaymentProvider")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)")
-                        .HasColumnName("payment_provider");
-
-                    b.Property<string>("PaymentStatus")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("payment_status");
-
-                    b.Property<DateTime?>("RefundedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("refunded_at");
-
-                    b.Property<DateTime?>("ReleasedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("released_at");
-
-                    b.Property<string>("TransactionId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("transaction_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("PK__Payments__3213E83F");
-
-                    b.HasIndex(new[] { "OrderId" }, "UQ__Payments__order_id")
-                        .IsUnique();
-
-                    b.HasIndex(new[] { "PaymentStatus" }, "idx_payments_status");
-
-                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("BitNow_Backend.DAL.Models.Rating", b =>
@@ -1153,41 +916,6 @@ namespace BitNow_Backend.DAL.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Dispute", b =>
-                {
-                    b.HasOne("BitNow_Backend.DAL.Models.User", "Buyer")
-                        .WithMany("DisputesAsBuyer")
-                        .HasForeignKey("BuyerId")
-                        .IsRequired()
-                        .HasConstraintName("FK__Disputes__buyer___6FE99F9F");
-
-                    b.HasOne("BitNow_Backend.DAL.Models.Order", "Order")
-                        .WithOne("Dispute")
-                        .HasForeignKey("BitNow_Backend.DAL.Models.Dispute", "OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK__Disputes__order__6EF57B66");
-
-                    b.HasOne("BitNow_Backend.DAL.Models.User", "Resolver")
-                        .WithMany("DisputesResolved")
-                        .HasForeignKey("ResolvedBy")
-                        .HasConstraintName("FK__Disputes__resolv__71D1E811");
-
-                    b.HasOne("BitNow_Backend.DAL.Models.User", "Seller")
-                        .WithMany("DisputesAsSeller")
-                        .HasForeignKey("SellerId")
-                        .IsRequired()
-                        .HasConstraintName("FK__Disputes__selle__70DDC3D8");
-
-                    b.Navigation("Buyer");
-
-                    b.Navigation("Order");
-
-                    b.Navigation("Resolver");
-
-                    b.Navigation("Seller");
-                });
-
             modelBuilder.Entity("BitNow_Backend.DAL.Models.EmailVerification", b =>
                 {
                     b.HasOne("BitNow_Backend.DAL.Models.User", "User")
@@ -1272,45 +1000,6 @@ namespace BitNow_Backend.DAL.Migrations
                         .HasConstraintName("FK__Notificat__user___05D8E0BE");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Order", b =>
-                {
-                    b.HasOne("BitNow_Backend.DAL.Models.Auction", "Auction")
-                        .WithMany()
-                        .HasForeignKey("AuctionId")
-                        .IsRequired()
-                        .HasConstraintName("FK__Orders__auction__6A30C649");
-
-                    b.HasOne("BitNow_Backend.DAL.Models.User", "Buyer")
-                        .WithMany("OrdersAsBuyer")
-                        .HasForeignKey("BuyerId")
-                        .IsRequired()
-                        .HasConstraintName("FK__Orders__buyer_id__6B24EA82");
-
-                    b.HasOne("BitNow_Backend.DAL.Models.User", "Seller")
-                        .WithMany("OrdersAsSeller")
-                        .HasForeignKey("SellerId")
-                        .IsRequired()
-                        .HasConstraintName("FK__Orders__seller_i__6C190EBB");
-
-                    b.Navigation("Auction");
-
-                    b.Navigation("Buyer");
-
-                    b.Navigation("Seller");
-                });
-
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Payment", b =>
-                {
-                    b.HasOne("BitNow_Backend.DAL.Models.Order", "Order")
-                        .WithOne("Payment")
-                        .HasForeignKey("BitNow_Backend.DAL.Models.Payment", "OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK__Payments__order___6D0D32F4");
-
-                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("BitNow_Backend.DAL.Models.Rating", b =>
@@ -1406,13 +1095,6 @@ namespace BitNow_Backend.DAL.Migrations
                     b.Navigation("Auctions");
                 });
 
-            modelBuilder.Entity("BitNow_Backend.DAL.Models.Order", b =>
-                {
-                    b.Navigation("Dispute");
-
-                    b.Navigation("Payment");
-                });
-
             modelBuilder.Entity("BitNow_Backend.DAL.Models.User", b =>
                 {
                     b.Navigation("AuctionSellers");
@@ -1425,12 +1107,6 @@ namespace BitNow_Backend.DAL.Migrations
 
                     b.Navigation("ContactMessages");
 
-                    b.Navigation("DisputesAsBuyer");
-
-                    b.Navigation("DisputesAsSeller");
-
-                    b.Navigation("DisputesResolved");
-
                     b.Navigation("FavoriteSellerBuyers");
 
                     b.Navigation("FavoriteSellerSellers");
@@ -1442,10 +1118,6 @@ namespace BitNow_Backend.DAL.Migrations
                     b.Navigation("MessageSenders");
 
                     b.Navigation("Notifications");
-
-                    b.Navigation("OrdersAsBuyer");
-
-                    b.Navigation("OrdersAsSeller");
 
                     b.Navigation("RatingRateds");
 

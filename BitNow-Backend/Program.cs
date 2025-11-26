@@ -34,6 +34,7 @@ builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<IAuctionChatService, AuctionChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
@@ -52,8 +53,10 @@ builder.Services.AddScoped<IAutoBidService, AutoBidService>();
 builder.Services.AddScoped<BitNow_Backend.BLL.IServices.IBidNotificationService, BitNow_Backend.Services.BidNotificationService>();
 // Notification Hub Service
 builder.Services.AddScoped<INotificationHub, NotificationHubService>();
-// Admin Stats
-builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
+    // Admin Stats
+    builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
+    // Seller Stats
+    builder.Services.AddScoped<ISellerStatsService, SellerStatsService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 

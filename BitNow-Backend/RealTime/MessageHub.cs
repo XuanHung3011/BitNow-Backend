@@ -20,6 +20,22 @@ namespace BitNow_Backend.RealTime
 			if (string.IsNullOrWhiteSpace(userId)) return;
 			await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user-{userId}");
 		}
+
+		/// <summary>
+		/// Join vào group chat của một auction để nhận tin nhắn realtime
+		/// </summary>
+		public async Task JoinAuctionChatGroup(int auctionId)
+		{
+			await Groups.AddToGroupAsync(Context.ConnectionId, $"auction-chat-{auctionId}");
+		}
+
+		/// <summary>
+		/// Rời khỏi group chat của một auction
+		/// </summary>
+		public async Task LeaveAuctionChatGroup(int auctionId)
+		{
+			await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"auction-chat-{auctionId}");
+		}
 	}
 }
 
