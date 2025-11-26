@@ -58,6 +58,8 @@ public partial class User
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 
     public virtual ICollection<Watchlist> Watchlists { get; set; } = new List<Watchlist>();
+
+    public virtual ICollection<SearchKeyword> SearchKeywords { get; set; } = new List<SearchKeyword>();
 }
 
 
