@@ -2,6 +2,8 @@
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace BitNow_Backend.BLL.Services;
@@ -31,5 +33,22 @@ public class SearchKeywordService : ISearchKeywordService
         };
 
         await _searchKeywordRepository.AddAsync(entity);
+    }
+
+    public async Task<IReadOnlyList<string>> GetRecentKeywordsAsync(int userId, int take = 20)
+    {
+        if (userId <= 0) return Array.Empty<string>();
+        if (take <= 0) take = 20;
+
+        var entities = await _searchKeywordRepository.GetRecentByUserAsync(userId, take);
+
+        // Lọc trùng và rỗng
+        var keywords = entities
+            .Select(k => k.Keyword?.Trim())
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return keywords;
     }
 }

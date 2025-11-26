@@ -12,6 +12,7 @@ namespace BitNow_Backend.BLL.Services
         private readonly IItemService _itemService;
         private readonly IBidService _bidService;
         private readonly IWatchlistService _watchlistService;
+        private readonly ISearchKeywordService _searchKeywordService;
         private readonly IEmbeddingService _embeddingService;
         private readonly IPineconeService _pineconeService;
         private readonly ILogger<RecommendationService> _logger;
@@ -24,6 +25,7 @@ namespace BitNow_Backend.BLL.Services
             IItemService itemService,
             IBidService bidService,
             IWatchlistService watchlistService,
+            ISearchKeywordService searchKeywordService,
             IEmbeddingService embeddingService,
             IPineconeService pineconeService,
             ILogger<RecommendationService> logger)
@@ -31,6 +33,7 @@ namespace BitNow_Backend.BLL.Services
             _itemService = itemService;
             _bidService = bidService;
             _watchlistService = watchlistService;
+            _searchKeywordService = searchKeywordService;
             _embeddingService = embeddingService;
             _pineconeService = pineconeService;
             _logger = logger;
@@ -60,12 +63,13 @@ namespace BitNow_Backend.BLL.Services
                 return candidateItems;
             }
 
-            // Lấy lịch sử đấu giá và watchlist để tạo textbuyer
+            // Lấy lịch sử đấu giá, watchlist và từ khóa tìm kiếm để tạo textbuyer
             var biddingHistory = await _bidService.GetBiddingHistoryAsync(userId, 1, 20);
             var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(50).ToList();
+            var searchKeywords = await _searchKeywordService.GetRecentKeywordsAsync(userId, 20);
 
-            // Kiểm tra nếu user mới (chưa có lịch sử đấu giá hoặc watchlist)
-            var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any();
+            // Kiểm tra nếu user mới (chưa có lịch sử đấu giá, watchlist hoặc từ khóa tìm kiếm)
+            var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any() || searchKeywords.Any();
 
             // Nếu user mới, trả về items ngẫu nhiên từ candidate pool
             if (!hasUserData)
@@ -76,8 +80,8 @@ namespace BitNow_Backend.BLL.Services
                 return shuffled;
             }
 
-            // Tạo textbuyer từ watchlist và bidding history
-            var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems);
+            // Tạo textbuyer từ watchlist, bidding history và search keywords
+            var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems, searchKeywords);
 
             // Chuyển textbuyer thành embedding vector
             var queryVector = await _embeddingService.GenerateEmbeddingAsync(textbuyer, cancellationToken);
@@ -126,9 +130,12 @@ namespace BitNow_Backend.BLL.Services
         }
 
         /// <summary>
-        /// Xây dựng textbuyer từ watchlist và bidding history để tạo embedding vector.
+        /// Xây dựng textbuyer từ watchlist, bidding history và search keywords để tạo embedding vector.
         /// </summary>
-        private static string BuildTextBuyer(IEnumerable<BiddingHistoryDto> biddingHistory, IEnumerable<WatchlistItemDto> watchlist)
+        private static string BuildTextBuyer(
+            IEnumerable<BiddingHistoryDto> biddingHistory,
+            IEnumerable<WatchlistItemDto> watchlist,
+            IEnumerable<string> searchKeywords)
         {
             var parts = new List<string>();
 
@@ -174,6 +181,13 @@ namespace BitNow_Backend.BLL.Services
                         parts.Add(string.Join(", ", watchlistParts));
                     }
                 }
+            }
+
+            // Thêm thông tin từ các từ khóa tìm kiếm gần đây
+            if (searchKeywords != null && searchKeywords.Any())
+            {
+                parts.Add("Recent search keywords:");
+                parts.Add(string.Join(", ", searchKeywords));
             }
 
             return string.Join(". ", parts);
