@@ -345,5 +345,96 @@ namespace BitNow_Backend.BLL.Services
                 PageSize = pageSize
             };
         }
+
+        public async Task<List<SellerAuctionDto>> GetAuctionsBySellerAsync(int sellerId)
+        {
+            var auctions = await _auctionRepository.GetAuctionsBySellerAsync(sellerId);
+            var now = DateTime.UtcNow;
+
+            var result = auctions.Select(a =>
+            {
+                // Determine display status based on time, not just status field
+                // Priority: draft > cancelled > scheduled > active > completed
+                string displayStatus;
+                
+                // 1. Draft: status = "draft"
+                if (a.Status != null && a.Status.ToLower() == "draft")
+                {
+                    displayStatus = "draft";
+                }
+                // 2. Cancelled: status = "cancelled"
+                else if (a.Status != null && a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "cancelled";
+                }
+                // 3. Scheduled: Chưa đến giờ bắt đầu (StartTime > now)
+                else if (a.StartTime > now)
+                {
+                    displayStatus = "scheduled";
+                }
+                // 4. Active: Đã bắt đầu và chưa kết thúc (StartTime <= now && EndTime > now)
+                else if (a.StartTime <= now && a.EndTime > now)
+                {
+                    displayStatus = "active";
+                }
+                // 5. Completed: Đã kết thúc (EndTime <= now)
+                else if (a.EndTime <= now)
+                {
+                    displayStatus = "completed";
+                }
+                // Fallback: Use status field if time logic doesn't match
+                else
+                {
+                    displayStatus = a.Status?.ToLower() ?? "unknown";
+                }
+
+                // Check if seller has rated the buyer (for completed auctions)
+                var hasRated = false;
+                if (displayStatus == "completed" && a.WinnerId != null)
+                {
+                    // TODO: Check if rating exists for this auction where raterId == sellerId and ratedId == winnerId
+                    // For now, defaulting to false
+                }
+
+                // Parse images
+                var images = a.Item?.Images;
+                var firstImage = "";
+                if (!string.IsNullOrEmpty(images))
+                {
+                    try
+                    {
+                        var imageList = System.Text.Json.JsonSerializer.Deserialize<List<string>>(images);
+                        firstImage = imageList?.FirstOrDefault() ?? "";
+                    }
+                    catch
+                    {
+                        // If not JSON, try comma-separated
+                        firstImage = images.Split(',').FirstOrDefault()?.Trim() ?? "";
+                    }
+                }
+
+                return new SellerAuctionDto
+                {
+                    Id = a.Id,
+                    ItemId = a.ItemId,
+                    ItemTitle = a.Item?.Title ?? "",
+                    ItemImages = firstImage,
+                    CategoryName = a.Item?.Category?.Name,
+                    StartingBid = a.StartingBid,
+                    CurrentBid = a.CurrentBid,
+                    BuyNowPrice = a.BuyNowPrice,
+                    BidCount = a.BidCount ?? 0,
+                    StartTime = a.StartTime,
+                    EndTime = a.EndTime,
+                    Status = a.Status ?? "",
+                    DisplayStatus = displayStatus,
+                    WinnerId = a.WinnerId,
+                    WinnerName = a.Winner?.FullName,
+                    HasRated = hasRated
+                };
+            }).ToList();
+
+            return result;
+        }
     }
 }
