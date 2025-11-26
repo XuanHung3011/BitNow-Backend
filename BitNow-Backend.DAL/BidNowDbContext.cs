@@ -28,6 +28,7 @@ public partial class BidNowDbContext : DbContext
     public virtual DbSet<UserRole> UserRoles { get; set; }
     public virtual DbSet<Watchlist> Watchlists { get; set; }
     public virtual DbSet<EmailVerification> EmailVerifications { get; set; }
+    public virtual DbSet<SearchKeyword> SearchKeywords { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -268,6 +269,21 @@ public partial class BidNowDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(e => e.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SearchKeyword>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.ToTable("SearchKeywords");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Keyword).HasMaxLength(255).HasColumnName("keyword");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())").HasColumnName("created_at");
+            entity.HasOne(e => e.User)
+                  .WithMany(u => u.SearchKeywords)
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade)
+                  .HasConstraintName("FK_SearchKeywords_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);
