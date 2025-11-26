@@ -244,6 +244,7 @@ namespace BitNow_Backend.BLL.Services
                 StartingBid = activeAuction?.StartingBid,
                 CurrentBid = activeAuction?.CurrentBid,
                 BidCount = activeAuction?.BidCount,
+                AuctionStartTime = activeAuction?.StartTime,
                 AuctionEndTime = activeAuction?.EndTime,
                 AuctionStatus = activeAuction?.Status
             };
