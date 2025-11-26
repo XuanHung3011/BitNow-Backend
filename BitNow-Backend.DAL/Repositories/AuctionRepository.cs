@@ -252,5 +252,16 @@ namespace BitNow_Backend.DAL.Repositories
 
             return (auctions, totalCount);
         }
+
+        public async Task<IEnumerable<Auction>> GetAuctionsBySellerAsync(int sellerId)
+        {
+            return await _context.Auctions
+                .Include(a => a.Item)
+                    .ThenInclude(i => i.Category)
+                .Include(a => a.Winner)
+                .Where(a => a.SellerId == sellerId)
+                .OrderByDescending(a => a.StartTime)
+                .ToListAsync();
+        }
     }
 }
