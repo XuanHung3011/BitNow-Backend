@@ -9,11 +9,16 @@ namespace BitNow_Backend.Controllers
     public class HomeController : ControllerBase
     {
         private readonly IItemService _itemService;
+        private readonly ISearchKeywordService _searchKeywordService;
         private readonly ILogger<HomeController> _logger;
 
-        public HomeController(IItemService itemService, ILogger<HomeController> logger)
+        public HomeController(
+            IItemService itemService,
+            ISearchKeywordService searchKeywordService,
+            ILogger<HomeController> logger)
         {
             _itemService = itemService;
+            _searchKeywordService = searchKeywordService;
             _logger = logger;
         }
 
@@ -79,13 +84,20 @@ namespace BitNow_Backend.Controllers
         /// </summary>
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<ItemResponseDto>>> SearchItems(
-            [FromQuery] string searchTerm)
+            [FromQuery] string searchTerm,
+            [FromQuery] int? userId = null)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(searchTerm))
                 {
                     return BadRequest(new { message = "Search term is required" });
+                }
+
+                // Nếu user đã đăng nhập (có userId) thì lưu từ khóa tìm kiếm vào bảng SearchKeywords
+                if (userId.HasValue && userId.Value > 0)
+                {
+                    await _searchKeywordService.LogSearchAsync(userId.Value, searchTerm);
                 }
 
                 var items = await _itemService.SearchApprovedItemsAsync(searchTerm);
@@ -105,7 +117,8 @@ namespace BitNow_Backend.Controllers
         public async Task<ActionResult<object>> SearchItemsPaged(
             [FromQuery] string searchTerm,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int pageSize = 10,
+            [FromQuery] int? userId = null)
         {
             try
             {
@@ -117,6 +130,12 @@ namespace BitNow_Backend.Controllers
                 if (page < 1) page = 1;
                 if (pageSize < 1) pageSize = 10;
                 if (pageSize > 100) pageSize = 100;
+
+                // Nếu user đã đăng nhập (có userId) thì lưu từ khóa tìm kiếm vào bảng SearchKeywords
+                if (userId.HasValue && userId.Value > 0)
+                {
+                    await _searchKeywordService.LogSearchAsync(userId.Value, searchTerm);
+                }
 
                 var (items, totalCount) = await _itemService.SearchApprovedItemsWithCountAsync(searchTerm, page, pageSize);
 

@@ -39,6 +39,9 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
+// Search keywords
+builder.Services.AddScoped<ISearchKeywordRepository, SearchKeywordRepository>();
+builder.Services.AddScoped<ISearchKeywordService, SearchKeywordService>();
 
 // File Upload Service
 builder.Services.AddScoped<BitNow_Backend.Services.IFileUploadService, BitNow_Backend.Services.FileUploadService>();
