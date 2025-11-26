@@ -48,17 +48,29 @@ namespace BitNow_Backend.Controllers
 		{
 			try
 			{
+				// DTO trả về cho người gửi (isMine = true cho sender)
 				var message = await _auctionChatService.AddMessageAsync(request);
-				
+
+				// DTO broadcast real-time cho tất cả clients (isMine luôn false, client sẽ tự xác định)
+				var broadcastMessage = new AuctionChatMessageDto
+				{
+					Id = message.Id,
+					Alias = message.Alias,
+					Content = message.Content,
+					SentAt = message.SentAt,
+					IsMine = false
+				};
+
 				var groupName = $"auction-chat-{request.AuctionId}";
-				_logger.LogInformation("Broadcasting message {MessageId} to group {GroupName}", message.Id, groupName);
-				
+				_logger.LogInformation("Broadcasting auction chat message {MessageId} to group {GroupName}", message.Id, groupName);
+
 				// Broadcast message mới qua SignalR đến tất cả users trong auction chat group
 				await _hubContext.Clients.Group(groupName)
-					.SendAsync("AuctionChatMessageReceived", message);
-				
-				_logger.LogInformation("Successfully broadcasted message {MessageId} to group {GroupName}", message.Id, groupName);
-				
+					.SendAsync("AuctionChatMessageReceived", broadcastMessage);
+
+				_logger.LogInformation("Successfully broadcasted auction chat message {MessageId} to group {GroupName}", message.Id, groupName);
+
+				// Trả về DTO gốc cho người gọi API (sender thấy isMine = true ngay lập tức)
 				return Ok(message);
 			}
 			catch (ArgumentException ex)
