@@ -37,6 +37,7 @@ namespace BitNow_Backend.DAL.DTOs
         public decimal? StartingBid { get; set; }  // Giá khởi điểm
         public decimal? CurrentBid { get; set; }   // Giá hiện tại
         public int? BidCount { get; set; }         // Số lượt đấu giá
+        public DateTime? AuctionStartTime { get; set; }  // Thời gian bắt đầu
         public DateTime? AuctionEndTime { get; set; }  // Thời gian kết thúc
         public string? AuctionStatus { get; set; }     // Trạng thái đấu giá
     }
