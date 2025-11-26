@@ -193,5 +193,23 @@ namespace BitNow_Backend.Controllers
             }
         }
 
+        /// <summary>
+        /// Get auctions by seller ID
+        /// </summary>
+        [HttpGet("seller/{sellerId}")]
+        public async Task<ActionResult<List<SellerAuctionDto>>> GetAuctionsBySeller(int sellerId)
+        {
+            try
+            {
+                var result = await _auctionService.GetAuctionsBySellerAsync(sellerId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting auctions for seller {SellerId}", sellerId);
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
     }
 }
