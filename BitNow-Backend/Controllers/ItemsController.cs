@@ -147,13 +147,17 @@ namespace BitNow_Backend.Controllers
                             _logger.LogWarning("No active admin users found to notify about new item {ItemId}", result.Id);
                         }
 
+                        // Lấy thông tin seller (người tạo sản phẩm) để lấy email
+                        var seller = await _context.Users.FirstOrDefaultAsync(u => u.Id == dto.SellerId);
+                        var sellerEmail = seller?.Email ?? "không xác định";
+
                         var notificationCount = 0;
                         foreach (var admin in adminUsers)
                         {
                             try
                             {
                                 // Truncate message nếu quá dài (max 500 chars)
-                                var message = $"Sản phẩm mới '{dto.Title}' cần phê duyệt từ seller ID {dto.SellerId}";
+                                var message = $"Tài khoản {sellerEmail} gửi yêu cầu phê duyệt sản phẩm ({dto.Title}) ";
                                 if (message.Length > 500)
                                 {
                                     message = message.Substring(0, 497) + "...";
@@ -210,11 +214,101 @@ namespace BitNow_Backend.Controllers
             }
         }
 
+        /// <summary>
+        /// Create a draft item (status will be 'draft')
+        /// </summary>
+        [HttpPost("draft")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<ItemResponseDto>> CreateDraftItem()
+        {
+            try
+            {
+                // Manually read from Form to handle model binding issues
+                var form = await Request.ReadFormAsync();
+
+                // Parse CreateItemDto from form
+                if (!int.TryParse(form["SellerId"].ToString(), out int sellerId) || sellerId <= 0)
+                {
+                    return BadRequest(new { message = "SellerId is required and must be greater than 0" });
+                }
+
+                if (!int.TryParse(form["CategoryId"].ToString(), out int categoryId) || categoryId <= 0)
+                {
+                    return BadRequest(new { message = "CategoryId is required and must be greater than 0" });
+                }
+
+                var title = form["Title"].ToString();
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return BadRequest(new { message = "Title is required" });
+                }
+
+                // For draft, basePrice can be 0
+                if (!decimal.TryParse(form["BasePrice"].ToString(), out decimal basePrice) || basePrice < 0)
+                {
+                    return BadRequest(new { message = "BasePrice must be greater than or equal to 0" });
+                }
+
+                var dto = new CreateItemDto
+                {
+                    SellerId = sellerId,
+                    CategoryId = categoryId,
+                    Title = title,
+                    Description = form["Description"].ToString(),
+                    Condition = form["Condition"].ToString(),
+                    Location = form["Location"].ToString(),
+                    BasePrice = basePrice
+                };
+
+                _logger.LogInformation("CreateDraftItem called with sellerId: {SellerId}, title: {Title}", dto.SellerId, dto.Title);
+
+                // Get image files
+                var images = form.Files.Where(f => f.Name == "images").ToList();
+
+                // Handle image uploads
+                string? imagesPath = null;
+                if (images != null && images.Count > 0)
+                {
+                    try
+                    {
+                        var savedPaths = await _fileUploadService.SaveImagesAsync(images, dto.Title);
+                        imagesPath = string.Join(",", savedPaths);
+                        _logger.LogInformation("Saved {Count} images for draft item '{Title}'", savedPaths.Count, dto.Title);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error saving images");
+                        return BadRequest(new { message = $"Error saving images: {ex.Message}" });
+                    }
+                }
+
+                var result = await _itemService.CreateDraftItemAsync(dto, imagesPath);
+                if (result == null)
+                {
+                    _logger.LogWarning("CreateDraftItemAsync returned null");
+                    return BadRequest(new { message = "Failed to create draft item" });
+                }
+
+                _logger.LogInformation("Draft item created successfully with ID: {ItemId}", result.Id);
+
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument when creating draft item");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating draft item");
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
 
         /// <summary>
         /// Get all items with pagination, filtering by status, category, seller, and sorting
         /// </summary>
-        /// <param name="statuses">Filter by status: 'pending', 'approved', 'rejected', 'archived' (comma-separated for multiple)</param>
+        /// <param name="statuses">Filter by status: 'pending', 'approved', 'rejected', 'archived', 'draft' (comma-separated for multiple)</param>
         /// <param name="categoryId">Filter by category ID</param>
         /// <param name="sellerId">Filter by seller ID (quan trọng: chỉ hiển thị items của seller đó)</param>
         /// <param name="sortBy">Sort by: 'Title', 'BasePrice', 'CreatedAt' (default: 'CreatedAt')</param>
@@ -263,7 +357,7 @@ namespace BitNow_Backend.Controllers
                         .ToList();
 
                     // Validate status values
-                    var validStatuses = new[] { "pending", "approved", "rejected", "archived" };
+                    var validStatuses = new[] { "pending", "approved", "rejected", "archived", "draft" };
                     var invalidStatuses = statusList.Where(s => !validStatuses.Contains(s, StringComparer.OrdinalIgnoreCase)).ToList();
                     if (invalidStatuses.Any())
                     {
@@ -345,7 +439,7 @@ namespace BitNow_Backend.Controllers
                             UserId = item.SellerId,
                             Type = "item_approved",
                             Message = message,
-                            Link = $"/seller/items"
+                            Link = $"/seller?openAuctionDialog=true"
                         });
 
                         _logger.LogInformation("Created notification for seller {SellerId} about approved item {ItemId} (Title: {Title})", item.SellerId, id, item.Title);
@@ -377,11 +471,18 @@ namespace BitNow_Backend.Controllers
         /// Reject an item (change status to 'rejected')
         /// </summary>
         /// <param name="id">Item ID</param>
+        /// <param name="dto">Reject reason</param>
         [HttpPut("{id}/reject")]
-        public async Task<ActionResult> RejectItem(int id)
+        public async Task<ActionResult> RejectItem(int id, [FromBody] RejectItemDto dto)
         {
             try
             {
+                // Validate reason
+                if (string.IsNullOrWhiteSpace(dto?.Reason))
+                {
+                    return BadRequest(new { message = "Lý do từ chối là bắt buộc" });
+                }
+
                 // Lấy thông tin item trước khi reject để lấy sellerId và title
                 var item = await _itemService.GetByIdAsync(id);
                 if (item == null)
@@ -395,13 +496,13 @@ namespace BitNow_Backend.Controllers
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
 
-                // Tạo thông báo cho seller về việc sản phẩm bị từ chối
+                // Tạo thông báo cho seller về việc sản phẩm bị từ chối kèm lý do
                 try
                 {
                     if (item.SellerId > 0)
                     {
                         // Truncate message nếu quá dài (max 500 chars)
-                        var message = $"Sản phẩm '{item.Title}' của bạn đã bị từ chối";
+                        var message = $"Sản phẩm '{item.Title}' của bạn đã bị từ chối. Lý do: {dto.Reason}";
                         if (message.Length > 500)
                         {
                             message = message.Substring(0, 497) + "...";
@@ -415,7 +516,7 @@ namespace BitNow_Backend.Controllers
                             Link = $"/seller/items"
                         });
 
-                        _logger.LogInformation("Created notification for seller {SellerId} about rejected item {ItemId} (Title: {Title})", item.SellerId, id, item.Title);
+                        _logger.LogInformation("Created notification for seller {SellerId} about rejected item {ItemId} (Title: {Title}) with reason: {Reason}", item.SellerId, id, item.Title, dto.Reason);
                     }
                     else
                     {
@@ -460,6 +561,43 @@ namespace BitNow_Backend.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting item {ItemId}", id);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        /// <summary>
+        /// Delete an item (only for draft items)
+        /// </summary>
+        /// <param name="id">Item ID</param>
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteItem(int id)
+        {
+            try
+            {
+                // Check if item exists and is a draft
+                var item = await _itemService.GetByIdAsync(id);
+                if (item == null)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
+                // Only allow deletion of draft items
+                if (item.Status?.ToLower() != "draft")
+                {
+                    return BadRequest(new { message = "Chỉ có thể xóa các sản phẩm ở trạng thái bản nháp" });
+                }
+
+                var result = await _itemService.DeleteItemAsync(id);
+                if (!result)
+                {
+                    return NotFound(new { message = $"Item with ID {id} not found" });
+                }
+
+                return Ok(new { message = "Đã xóa sản phẩm thành công" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting item {ItemId}", id);
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
