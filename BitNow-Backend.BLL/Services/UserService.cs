@@ -65,7 +65,7 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
             Phone = userDto.Phone,
             AvatarUrl = userDto.AvatarUrl,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.Now,
             ReputationScore = 0.00m,
             TotalRatings = 0,
             TotalSales = 0,
@@ -77,7 +77,7 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         // Thêm vai trò mặc định buyer (best-effort)
         try
         {
-            user.UserRoles.Add(new UserRole { UserId = user.Id, Role = "buyer", CreatedAt = DateTime.UtcNow });
+            user.UserRoles.Add(new UserRole { UserId = user.Id, Role = "buyer", CreatedAt = DateTime.Now });
             await _userRepository.UpdateAsync(user);
         }
         catch
@@ -230,7 +230,7 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
 
         if (user.UserRoles.Any(r => r.Role == role)) return true; // already has role
 
-        user.UserRoles.Add(new UserRole { UserId = user.Id, Role = role, CreatedAt = DateTime.UtcNow });
+        user.UserRoles.Add(new UserRole { UserId = user.Id, Role = role, CreatedAt = DateTime.Now });
         await _userRepository.UpdateAsync(user);
         return true;
     }

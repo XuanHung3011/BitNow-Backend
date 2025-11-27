@@ -16,7 +16,7 @@ public class PlatformAnalyticsService : IPlatformAnalyticsService
 
     public async Task<PlatformAnalyticsDto> GetPlatformAnalyticsAsync()
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var startOfMonth = new DateTime(now.Year, now.Month, 1);
         var endOfMonth = startOfMonth.AddMonths(1);
         var startOfLastMonth = startOfMonth.AddMonths(-1);
@@ -226,7 +226,7 @@ public class PlatformAnalyticsService : IPlatformAnalyticsService
 
     public async Task<PlatformAnalyticsDetailDto> GetAnalyticsDetailAsync(string type)
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var chartData = new List<ChartDataPoint>();
         var summary = new Dictionary<string, object>();
 

@@ -27,7 +27,7 @@ namespace BitNow_Backend.DAL.Repositories
 
         public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
             var query = _context.Auctions
                 .Include(a => a.Item)
                     .ThenInclude(i => i.Category)
@@ -155,7 +155,7 @@ namespace BitNow_Backend.DAL.Repositories
                 // Lưu thời gian tạm dừng khi status = "cancelled"
                 if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
                 {
-                    auction.PausedAt = DateTime.UtcNow;
+                    auction.PausedAt = DateTime.Now;
                 }
 
                 await _context.SaveChangesAsync();
@@ -181,7 +181,7 @@ namespace BitNow_Backend.DAL.Repositories
                 // Kiểm tra nếu có thời gian tạm dừng, tính và cộng vào EndTime
                 if (auction.PausedAt.HasValue)
                 {
-                    var pausedDuration = DateTime.UtcNow - auction.PausedAt.Value;
+                    var pausedDuration = DateTime.Now - auction.PausedAt.Value;
                     auction.EndTime = auction.EndTime.Add(pausedDuration);
                 }
 
@@ -201,7 +201,7 @@ namespace BitNow_Backend.DAL.Repositories
         }
         public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
 
             // Get distinct auction IDs where user has placed bids
             var auctionIdsQuery = _context.Bids
@@ -230,7 +230,7 @@ namespace BitNow_Backend.DAL.Repositories
         }
         public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetWonAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
 
             // Get auctions where user is the winner
             var query = _context.Auctions

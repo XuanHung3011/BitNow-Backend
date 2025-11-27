@@ -354,7 +354,7 @@ namespace BitNow_Backend.BLL.Services
         public async Task<List<SellerAuctionDto>> GetAuctionsBySellerAsync(int sellerId)
         {
             var auctions = await _auctionRepository.GetAuctionsBySellerAsync(sellerId);
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
 
             var result = auctions.Select(a =>
             {

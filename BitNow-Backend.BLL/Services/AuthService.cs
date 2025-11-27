@@ -56,7 +56,7 @@ public class AuthService : IAuthService
             Phone = dto.Phone,
             AvatarUrl = dto.AvatarUrl,
             IsActive = false, // require verification
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.Now,
             ReputationScore = 0.00m,
             TotalRatings = 0,
             TotalSales = 0,
@@ -68,7 +68,7 @@ public class AuthService : IAuthService
         // Gán vai trò mặc định buyer (không làm hỏng quy trình nếu lỗi)
         try
         {
-            user.UserRoles.Add(new UserRole { UserId = user.Id, Role = "buyer", CreatedAt = DateTime.UtcNow });
+            user.UserRoles.Add(new UserRole { UserId = user.Id, Role = "buyer", CreatedAt = DateTime.Now });
             await _userRepository.UpdateAsync(user);
         }
         catch (Exception ex)
@@ -118,7 +118,7 @@ public class AuthService : IAuthService
         var record = await _verificationRepository.GetByTokenAsync(token);
         if (record == null) return false;
         if (record.IsUsed) return false;
-        if (record.ExpiresAt < DateTime.UtcNow) return false;
+        if (record.ExpiresAt < DateTime.Now) return false;
 
         var user = await _userRepository.GetByEmailAsync(record.Email);
         if (user == null) return false;
@@ -162,7 +162,7 @@ public class AuthService : IAuthService
         var record = await _verificationRepository.GetByTokenAsync(token);
         if (record == null) return false;
         if (record.IsUsed) return false;
-        if (record.ExpiresAt < DateTime.UtcNow) return false;
+        if (record.ExpiresAt < DateTime.Now) return false;
 
         var user = await _userRepository.GetByEmailAsync(record.Email);
         if (user == null) return false;
@@ -189,7 +189,7 @@ public class AuthService : IAuthService
             UserId = userId,
             Email = email,
             Token = token,
-            ExpiresAt = DateTime.UtcNow.AddHours(24),
+            ExpiresAt = DateTime.Now.AddHours(24),
             IsUsed = false
         };
 

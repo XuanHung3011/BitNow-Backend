@@ -187,7 +187,7 @@ public class AdminAuctionsController : ControllerBase
             {
                 auctionId = id,
                 status = normalizedStatus,
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.Now
             };
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
             await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
@@ -198,7 +198,7 @@ public class AdminAuctionsController : ControllerBase
 
             if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
             {
-                var notificationTime = DateTime.UtcNow;
+                var notificationTime = DateTime.Now;
                 var formattedTime = FormatNotificationTimestamp(notificationTime);
                 var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin vào lúc {formattedTime}.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
                 try
@@ -241,7 +241,7 @@ public class AdminAuctionsController : ControllerBase
                 return BadRequest(new { message = "Chỉ có thể tiếp tục các phiên đấu giá đang bị tạm dừng." });
             }
 
-            if (auction.EndTime <= DateTime.UtcNow)
+            if (auction.EndTime <= DateTime.Now)
             {
                 return BadRequest(new { message = "Không thể tiếp tục phiên đấu giá đã kết thúc." });
             }
@@ -256,7 +256,7 @@ public class AdminAuctionsController : ControllerBase
             {
                 auctionId = id,
                 status = "active",
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.Now
             };
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
             await _auctionHub.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
@@ -267,7 +267,7 @@ public class AdminAuctionsController : ControllerBase
 
             try
             {
-                var notificationTime = DateTime.UtcNow;
+                var notificationTime = DateTime.Now;
                 var formattedTime = FormatNotificationTimestamp(notificationTime);
                 var note = string.IsNullOrWhiteSpace(request?.Reason) ? string.Empty : $"\nGhi chú: {request!.Reason!.Trim()}";
                 var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin vào lúc {formattedTime}.{note}";

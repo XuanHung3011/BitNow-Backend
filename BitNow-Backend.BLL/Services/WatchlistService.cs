@@ -25,7 +25,7 @@ namespace BitNow_Backend.BLL.Services
 			{
 				UserId = request.UserId,
 				AuctionId = request.AuctionId,
-				AddedAt = DateTime.UtcNow
+				AddedAt = DateTime.Now
 			};
 
 			await _watchlistRepository.AddAsync(entity);

@@ -48,7 +48,7 @@ namespace BitNow_Backend.DAL.Repositories
 
         public async Task<Notification> AddAsync(Notification notification)
         {
-            notification.CreatedAt = DateTime.UtcNow;
+            notification.CreatedAt = DateTime.Now;
             notification.IsRead = false;
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();

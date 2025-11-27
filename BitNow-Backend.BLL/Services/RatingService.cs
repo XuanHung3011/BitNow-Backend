@@ -49,7 +49,7 @@ public class RatingService : IRatingService
             RatedId = dto.RatedId,
             Rating1 = dto.Rating,
             Comment = dto.Comment,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         };
 
         rating = await _ratingRepository.AddAsync(rating);

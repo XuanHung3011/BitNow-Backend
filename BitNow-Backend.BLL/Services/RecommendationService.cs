@@ -60,7 +60,7 @@ namespace BitNow_Backend.BLL.Services
                 .Where(i =>
                     i.AuctionId.HasValue &&
                     string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
-                    (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.UtcNow))
+                    (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.Now))
                 .OrderBy(i => i.AuctionEndTime ?? DateTime.MaxValue)
                 .Take(Math.Clamp(limit * 6, limit, 60))
                 .ToList();
