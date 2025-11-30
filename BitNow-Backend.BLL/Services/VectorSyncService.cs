@@ -1,30 +1,107 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace BitNow_Backend.BLL.Services
 {
-    /// <summary>
-    /// Service đồng bộ dữ liệu phiên đấu giá vào Pinecone vector database.
-    /// </summary>
+
     public class VectorSyncService : IVectorSyncService
     {
         private readonly IItemService _itemService;
-        private readonly IEmbeddingService _embeddingService;
         private readonly IPineconeService _pineconeService;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<VectorSyncService> _logger;
 
         public VectorSyncService(
             IItemService itemService,
-            IEmbeddingService embeddingService,
             IPineconeService pineconeService,
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration,
             ILogger<VectorSyncService> logger)
         {
             _itemService = itemService;
-            _embeddingService = embeddingService;
             _pineconeService = pineconeService;
+            _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
             _logger = logger;
         }
+
+       
+
+
+        /// Tạo embedding vector từ text sử dụng LM Studio (local) với Nomic Embed model.
+        public async Task<float[]> GenerateEmbeddingAsync(string text, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                throw new ArgumentException("Text cannot be null or empty", nameof(text));
+            }
+
+            try
+            {
+                var lmStudioUrl = _configuration["LMStudio:BaseUrl"] ?? "http://localhost:1234";
+                var model = _configuration["LMStudio:Model"] ?? "nomic-embed-text-v1.5";
+
+                var client = _httpClientFactory.CreateClient("LMStudio");
+                client.BaseAddress = new Uri(lmStudioUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+
+                var payload = new
+                {
+                    model = model,
+                    input = text
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/embeddings")
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+
+                using var response = await client.SendAsync(request, cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogError("LM Studio API returned non-success status {Status}: {Body}",
+                        response.StatusCode, errorText);
+                    throw new InvalidOperationException($"LM Studio API error: {response.StatusCode} - {errorText}");
+                }
+
+                using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+
+                var root = document.RootElement;
+                var data = root.GetProperty("data");
+
+                if (data.GetArrayLength() == 0)
+                {
+                    throw new InvalidOperationException("LM Studio returned empty embedding data");
+                }
+
+                var embedding = data[0].GetProperty("embedding");
+                var embeddingArray = new List<float>();
+
+                foreach (var element in embedding.EnumerateArray())
+                {
+                    embeddingArray.Add((float)element.GetDouble());
+                }
+
+                return embeddingArray.ToArray();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating embedding for text: {Text}", text);
+                throw;
+            }
+        }
+
+        
 
         public async Task SyncActiveAuctionsAsync(CancellationToken cancellationToken = default)
         {
@@ -55,11 +132,13 @@ namespace BitNow_Backend.BLL.Services
                     catch (Exception ex)
                     {
                         errorCount++;
-                        _logger.LogWarning(ex, "Failed to sync auction {AuctionId} (Item {ItemId})", item.AuctionId, item.Id);
+                        _logger.LogWarning(ex, "Failed to sync auction {AuctionId} (Item {ItemId})",
+                            item.AuctionId, item.Id);
                     }
                 }
 
-                _logger.LogInformation("Sync completed: {SuccessCount} succeeded, {ErrorCount} failed", successCount, errorCount);
+                _logger.LogInformation("Sync completed: {SuccessCount} succeeded, {ErrorCount} failed",
+                    successCount, errorCount);
             }
             catch (Exception ex)
             {
@@ -77,24 +156,22 @@ namespace BitNow_Backend.BLL.Services
 
             try
             {
+                // Tạo text representation
                 var textRepresentation = BuildItemText(item);
                 _logger.LogInformation("Text for embedding: {Text}", textRepresentation);
 
-                var embedding = await _embeddingService.GenerateEmbeddingAsync(textRepresentation, cancellationToken);
+                // Tạo embedding vector
+                var embedding = await GenerateEmbeddingAsync(textRepresentation, cancellationToken);
                 _logger.LogInformation("Generated embedding with {Dimensions} dimensions", embedding.Length);
 
-                // ✅ Thêm endTimeUnix và status vào metadata để filter trên Pinecone
+                // Chuẩn bị metadata (loại bỏ basePrice, currentBid, category)
                 var metadata = new Dictionary<string, object>
                 {
                     { "itemId", item.Id },
                     { "auctionId", item.AuctionId.Value },
                     { "title", item.Title ?? "" },
-                    { "category", item.CategoryName ?? "" },
                     { "description", item.Description ?? "" },
-                    { "basePrice", item.BasePrice?.ToString() ?? "" },
-                    { "currentBid", item.CurrentBid?.ToString() ?? "" },
                     { "status", item.AuctionStatus ?? "active" },
-                    // ✅ Lưu end time dưới dạng Unix timestamp (seconds) để Pinecone filter được
                     { "endTimeUnix", item.AuctionEndTime.HasValue
                         ? new DateTimeOffset(item.AuctionEndTime.Value).ToUnixTimeSeconds()
                         : 0 }
@@ -103,17 +180,20 @@ namespace BitNow_Backend.BLL.Services
                 var vectorId = $"auction_{item.AuctionId.Value}";
                 _logger.LogInformation("Upserting vector with ID: {VectorId}", vectorId);
 
+                // Upsert vào Pinecone
                 await _pineconeService.UpsertVectorAsync(
                     vectorId,
                     embedding,
                     metadata,
                     cancellationToken);
 
-                _logger.LogInformation("✅ Successfully synced auction {AuctionId} to Pinecone", item.AuctionId.Value);
+                _logger.LogInformation("✅ Successfully synced auction {AuctionId} to Pinecone",
+                    item.AuctionId.Value);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error syncing auction {AuctionId}: {Message}", item.AuctionId, ex.Message);
+                _logger.LogError(ex, "❌ Error syncing auction {AuctionId}: {Message}",
+                    item.AuctionId, ex.Message);
                 throw;
             }
         }
@@ -144,11 +224,11 @@ namespace BitNow_Backend.BLL.Services
                     .Select(i => $"auction_{i.AuctionId.Value}")
                     .ToList();
 
-                _logger.LogInformation("Removing {Count} expired auctions from Pinecone", idsToDelete.Count);
+                _logger.LogInformation("Removing expired auctions from Pinecone");
 
                 await _pineconeService.DeleteVectorsAsync(idsToDelete, cancellationToken);
 
-                _logger.LogInformation("Successfully removed {Count} expired auctions from Pinecone", idsToDelete.Count);
+                _logger.LogInformation("Successfully removed  expired auctions from Pinecone");
             }
             catch (Exception ex)
             {
@@ -174,6 +254,8 @@ namespace BitNow_Backend.BLL.Services
             }
         }
 
+
+        /// Tạo text representation của item để embedding.
         private static string BuildItemText(ItemResponseDto item)
         {
             var parts = new List<string>();
@@ -203,17 +285,9 @@ namespace BitNow_Backend.BLL.Services
                 parts.Add($"Location: {item.Location}");
             }
 
-            if (item.BasePrice.HasValue)
-            {
-                parts.Add($"Base price: {item.BasePrice.Value}");
-            }
-
-            if (item.CurrentBid.HasValue)
-            {
-                parts.Add($"Current bid: {item.CurrentBid.Value}");
-            }
-
             return string.Join(". ", parts);
         }
+
+     
     }
 }

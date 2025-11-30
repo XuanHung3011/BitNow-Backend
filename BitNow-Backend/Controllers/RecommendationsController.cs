@@ -23,16 +23,13 @@ namespace BitNow_Backend.Controllers
             _logger = logger;
         }
 
-        /// <summary>
+
         /// API gợi ý "Dành riêng cho bạn" cho người dùng, sử dụng vector similarity search với Pinecone.
-        /// </summary>
-        /// <param name="userId">Id người dùng</param>
-        /// <param name="limit">Số lượng item cần gợi ý</param>
         [HttpGet("personalized")]
         [ProducesResponseType(typeof(IEnumerable<ItemResponseDto>), StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<ItemResponseDto>>> GetPersonalized(
             [FromQuery] int userId,
-            [FromQuery] int limit = 8,
+            [FromQuery] int limit = 4,
             CancellationToken cancellationToken = default)
         {
             if (userId <= 0)
@@ -77,9 +74,8 @@ namespace BitNow_Backend.Controllers
             }
         }
 
-        /// <summary>
+
         /// Xóa các auctions đã hết hạn khỏi Pinecone
-        /// </summary>
         [HttpPost("sync/remove-expired")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveExpiredAuctions(CancellationToken cancellationToken)

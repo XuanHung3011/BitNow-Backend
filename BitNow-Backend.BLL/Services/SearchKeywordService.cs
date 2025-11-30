@@ -5,16 +5,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace BitNow_Backend.BLL.Services;
 
 public class SearchKeywordService : ISearchKeywordService
 {
     private readonly ISearchKeywordRepository _searchKeywordRepository;
+    private readonly ILogger<SearchKeywordService> _logger;
 
-    public SearchKeywordService(ISearchKeywordRepository searchKeywordRepository)
+    public SearchKeywordService(
+         ISearchKeywordRepository searchKeywordRepository,
+         ILogger<SearchKeywordService> logger)
     {
         _searchKeywordRepository = searchKeywordRepository;
+        _logger = logger;
     }
 
     public async Task LogSearchAsync(int userId, string keyword)
@@ -50,5 +55,27 @@ public class SearchKeywordService : ISearchKeywordService
             .ToList();
 
         return keywords;
+    }
+
+
+    /// Xóa các search keywords cũ hơn retention period 
+    public async Task<int> DeleteOldKeywordsAsync(TimeSpan retentionPeriod, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cutoffDate = DateTime.UtcNow.Subtract(retentionPeriod);
+            _logger.LogInformation("Deleting search keywords older than {CutoffDate} ({Days} days)",
+                cutoffDate, retentionPeriod.TotalDays);
+
+            var deletedCount = await _searchKeywordRepository.DeleteOlderThanAsync(cutoffDate, cancellationToken);
+
+            _logger.LogInformation("Successfully deleted {Count} old search keywords", deletedCount);
+            return deletedCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting old search keywords");
+            throw;
+        }
     }
 }

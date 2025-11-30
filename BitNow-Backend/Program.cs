@@ -10,6 +10,8 @@ using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.FileProviders;
 using BitNow_Backend.Services;
 using BitNow_Backend.RealTime;
+using BitNow_Backend.BLL.BackgroundServices;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -63,9 +65,12 @@ builder.Services.AddScoped<INotificationHub, NotificationHubService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
+// Register Background Service
+builder.Services.AddHostedService<CleanupBackgroundService>();
 
 // AI Recommendations - Vector-based
-builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+Console.OutputEncoding = Encoding.UTF8;
+
 builder.Services.AddScoped<IPineconeService, PineconeService>();
 builder.Services.AddScoped<IVectorSyncService, VectorSyncService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
