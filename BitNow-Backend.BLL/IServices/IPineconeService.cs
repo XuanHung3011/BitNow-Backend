@@ -37,6 +37,8 @@ namespace BitNow_Backend.BLL.IServices
         /// <param name="ids">Danh sách IDs cần xóa</param>
         /// <param name="cancellationToken">Cancellation token</param>
         Task DeleteVectorsAsync(IEnumerable<string> ids, CancellationToken cancellationToken = default);
+
+        Task DeleteAllVectorsAsync(CancellationToken cancellationToken = default);
     }
 }
 

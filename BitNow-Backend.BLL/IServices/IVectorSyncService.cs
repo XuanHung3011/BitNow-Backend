@@ -25,6 +25,8 @@ namespace BitNow_Backend.BLL.IServices
         /// </summary>
         /// <param name="cancellationToken">Cancellation token</param>
         Task RemoveExpiredAuctionsAsync(CancellationToken cancellationToken = default);
+
+        Task ClearAllVectorsAsync(CancellationToken cancellationToken = default);
     }
 }
 

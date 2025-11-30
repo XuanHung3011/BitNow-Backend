@@ -95,6 +95,30 @@ namespace BitNow_Backend.Controllers
                 return StatusCode(500, new { message = "Remove failed", error = ex.Message });
             }
         }
+
+        [HttpPost("sync/clear-all")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ClearAllVectors(CancellationToken cancellationToken)
+        {
+            try
+            {
+                _logger.LogWarning("Clearing ALL vectors from Pinecone");
+
+                await _vectorSyncService.ClearAllVectorsAsync(cancellationToken);
+
+                return Ok(new
+                {
+                    message = "Successfully deleted ALL vectors from Pinecone",
+                    note = "Run /sync/active-auctions to rebuild recommendation data"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing all vectors");
+                return StatusCode(500, new { message = "Clear operation failed", error = ex.Message });
+            }
+        }
     }
 }
 

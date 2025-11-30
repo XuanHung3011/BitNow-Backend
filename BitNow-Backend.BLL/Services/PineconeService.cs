@@ -269,5 +269,42 @@ namespace BitNow_Backend.BLL.Services
                 throw;
             }
         }
+
+        public async Task DeleteAllVectorsAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var client = CreateClient();
+
+                // Pinecone API cho phép xóa tất cả vectors bằng cách gửi deleteAll: true
+                var payload = new
+                {
+                    deleteAll = true
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                using var request = new HttpRequestMessage(HttpMethod.Post, "/vectors/delete")
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+
+                using var response = await client.SendAsync(request, cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogError("Pinecone deleteAll returned non-success status {Status}: {Body}",
+                        response.StatusCode, errorText);
+                    throw new InvalidOperationException($"Pinecone deleteAll error: {response.StatusCode} - {errorText}");
+                }
+
+                _logger.LogInformation("Successfully deleted all vectors from Pinecone index");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting all vectors from Pinecone");
+                throw;
+            }
+        }
     }
 }

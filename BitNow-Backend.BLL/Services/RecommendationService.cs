@@ -18,7 +18,6 @@ namespace BitNow_Backend.BLL.Services
         private readonly ILogger<RecommendationService> _logger;
 
         // Ngưỡng điểm tương đồng tối thiểu (0.0 - 1.0)
-        // Items có score < threshold sẽ bị loại bỏ
         private const float SIMILARITY_THRESHOLD = 0.5f;
 
         public RecommendationService(
@@ -39,7 +38,8 @@ namespace BitNow_Backend.BLL.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<ItemResponseDto>> GetPersonalizedItemsAsync(int userId, int limit, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<ItemResponseDto>> GetPersonalizedItemsAsync(
+     int userId, int limit, CancellationToken cancellationToken = default)
         {
             if (userId <= 0)
             {
@@ -49,85 +49,127 @@ namespace BitNow_Backend.BLL.Services
             if (limit < 1) limit = 8;
             if (limit > 24) limit = 24;
 
-            // Lấy tất cả item có đấu giá đang active
-            var allApprovedItems = await _itemService.GetAllApprovedItemsAsync();
-            var candidateItems = allApprovedItems
-                .Where(i =>
-                    i.AuctionId.HasValue &&
-                    string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
-                    (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.UtcNow))
-                .ToList();
-
-            if (!candidateItems.Any())
-            {
-                return candidateItems;
-            }
-
-            // Lấy lịch sử đấu giá, watchlist và từ khóa tìm kiếm để tạo textbuyer
+            // Lấy lịch sử user
             var biddingHistory = await _bidService.GetBiddingHistoryAsync(userId, 1, 20);
             var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(50).ToList();
             var searchKeywords = await _searchKeywordService.GetRecentKeywordsAsync(userId, 20);
-
-            // Kiểm tra nếu user mới (chưa có lịch sử đấu giá, watchlist hoặc từ khóa tìm kiếm)
             var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any() || searchKeywords.Any();
 
-            // Nếu user mới, trả về items ngẫu nhiên từ candidate pool
+            // Fallback cho new users
             if (!hasUserData)
             {
-                _logger.LogInformation("User {UserId} is new (no history/watchlist). Returning random recommendations.", userId);
+                _logger.LogInformation("User {UserId} is new. Returning random recommendations.", userId);
+                var approvedItemsForFallback = await _itemService.GetAllApprovedItemsAsync();
+                var activeItems = approvedItemsForFallback
+                    .Where(i =>
+                        i.AuctionId.HasValue &&
+                        string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
+                        (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.UtcNow))
+                    .ToList();
+
                 var random = new Random(userId);
-                var shuffled = candidateItems.OrderBy(_ => random.Next()).Take(limit).ToList();
-                return shuffled;
+                return activeItems.OrderBy(_ => random.Next()).Take(limit).ToList();
             }
 
-            // Tạo textbuyer từ watchlist, bidding history và search keywords
+            // Tạo textbuyer và embedding
             var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems, searchKeywords);
+            _logger.LogInformation("User {UserId} textbuyer: {TextBuyer}", userId, textbuyer);
 
-            // Chuyển textbuyer thành embedding vector
             var queryVector = await _embeddingService.GenerateEmbeddingAsync(textbuyer, cancellationToken);
 
-            // Tìm kiếm nhiều hơn để có đủ items sau khi filter theo threshold
-            var searchLimit = Math.Min(limit, 20);
-            var similarResults = await _pineconeService.QuerySimilarAsync(queryVector, searchLimit, cancellationToken: cancellationToken);
+            // Query Pinecone với filter
+            var currentTimeUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var filter = new Dictionary<string, object>
+            {
+                ["$and"] = new[]
+                {
+            new Dictionary<string, object>
+            {
+                ["status"] = new Dictionary<string, object> { ["$eq"] = "active" }
+            },
+            new Dictionary<string, object>
+            {
+                ["$or"] = new[]
+                {
+                    new Dictionary<string, object>
+                    {
+                        ["endTimeUnix"] = new Dictionary<string, object> { ["$eq"] = 0 }
+                    },
+                    new Dictionary<string, object>
+                    {
+                        ["endTimeUnix"] = new Dictionary<string, object> { ["$gt"] = currentTimeUnix }
+                    }
+                }
+            }
+        }
+            };
 
-            // ✅ LỌC THEO THRESHOLD: Chỉ lấy items có score >= SIMILARITY_THRESHOLD
+            var searchLimit = Math.Max(limit * 2, 20);
+            var similarResults = await _pineconeService.QuerySimilarAsync(
+                queryVector, searchLimit, filter, cancellationToken);
+
+            // ✅ Log top results
+            _logger.LogInformation(
+                "User {UserId}: Pinecone returned {@TopResults}",
+                userId,
+                similarResults.Take(10).Select(r => new { r.id, score = r.score.ToString("F3") }));
+
+            // Filter theo threshold
             var filteredResults = similarResults
                 .Where(r => r.score >= SIMILARITY_THRESHOLD)
                 .ToList();
 
             _logger.LogInformation(
-                "User {UserId}: Found {TotalResults} similar vectors, {FilteredCount} passed threshold {Threshold}",
+                "User {UserId}: {TotalResults} total, {FilteredCount} passed threshold {Threshold}",
                 userId, similarResults.Count, filteredResults.Count, SIMILARITY_THRESHOLD);
 
-            // Nếu không có kết quả phù hợp (score cao), trả về empty list
             if (!filteredResults.Any())
             {
-                _logger.LogWarning(
-                    "User {UserId}: No items with similarity score >= {Threshold}. Returning empty recommendations.",
-                    userId, SIMILARITY_THRESHOLD);
-
+                _logger.LogWarning("User {UserId}: No items passed threshold", userId);
                 return Enumerable.Empty<ItemResponseDto>();
             }
 
-            // Lấy auction IDs từ kết quả đã lọc
+            // Lấy auction IDs
             var auctionIds = filteredResults
                 .Select(r => r.id.Replace("auction_", ""))
                 .Where(id => int.TryParse(id, out _))
                 .Select(int.Parse)
+                .ToHashSet();
+
+            // ✅ Tạo score dictionary
+            var scoreDict = filteredResults.ToDictionary(
+                r => int.Parse(r.id.Replace("auction_", "")),
+                r => r.score
+            );
+
+            // Lấy items và sort theo similarity score
+            var allApprovedItems = await _itemService.GetAllApprovedItemsAsync();
+            var currentTime = DateTime.UtcNow;
+
+            var recommendedItems = allApprovedItems
+                .Where(i =>
+                    i.AuctionId.HasValue &&
+                    auctionIds.Contains(i.AuctionId.Value) &&
+                    string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
+                    (!i.AuctionEndTime.HasValue || i.AuctionEndTime > currentTime))
+                .OrderByDescending(i => scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f)) // ✅ Sort by score
+                .Take(limit)
                 .ToList();
 
-            // Lấy các items tương ứng với auction IDs
-            var recommendedItems = candidateItems
-                .Where(i => i.AuctionId.HasValue && auctionIds.Contains(i.AuctionId.Value))
-                .ToList();
-
-            // Chỉ trả về các items thực sự phù hợp, không fill bằng random
+            // ✅ Log final recommendations
             _logger.LogInformation(
-                "User {UserId}: Returning {Count} recommended items (requested: {Limit})",
-                userId, recommendedItems.Count, limit);
+                "User {UserId}: Returning {@Items}",
+                userId,
+                recommendedItems.Select(i => new {
+                    AuctionId = i.AuctionId,
+                    Title = i.Title,
+                    Category = i.CategoryName,
+                    Score = scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f).ToString("F3")
+                }));
 
             return recommendedItems;
         }
+
 
         /// <summary>
         /// Xây dựng textbuyer từ watchlist, bidding history và search keywords để tạo embedding vector.

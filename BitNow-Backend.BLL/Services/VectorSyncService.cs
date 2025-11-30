@@ -83,17 +83,22 @@ namespace BitNow_Backend.BLL.Services
                 var embedding = await _embeddingService.GenerateEmbeddingAsync(textRepresentation, cancellationToken);
                 _logger.LogInformation("Generated embedding with {Dimensions} dimensions", embedding.Length);
 
+                // ✅ Thêm endTimeUnix và status vào metadata để filter trên Pinecone
                 var metadata = new Dictionary<string, object>
-        {
-            { "itemId", item.Id },
-            { "auctionId", item.AuctionId.Value },
-            { "title", item.Title ?? "" },
-            { "category", item.CategoryName ?? "" },
-            { "description", item.Description ?? "" },
-            { "basePrice", item.BasePrice?.ToString() ?? "" },
-            { "currentBid", item.CurrentBid?.ToString() ?? "" },
-            { "status", item.AuctionStatus ?? "" }
-        };
+                {
+                    { "itemId", item.Id },
+                    { "auctionId", item.AuctionId.Value },
+                    { "title", item.Title ?? "" },
+                    { "category", item.CategoryName ?? "" },
+                    { "description", item.Description ?? "" },
+                    { "basePrice", item.BasePrice?.ToString() ?? "" },
+                    { "currentBid", item.CurrentBid?.ToString() ?? "" },
+                    { "status", item.AuctionStatus ?? "active" },
+                    // ✅ Lưu end time dưới dạng Unix timestamp (seconds) để Pinecone filter được
+                    { "endTimeUnix", item.AuctionEndTime.HasValue
+                        ? new DateTimeOffset(item.AuctionEndTime.Value).ToUnixTimeSeconds()
+                        : 0 }
+                };
 
                 var vectorId = $"auction_{item.AuctionId.Value}";
                 _logger.LogInformation("Upserting vector with ID: {VectorId}", vectorId);
@@ -152,6 +157,23 @@ namespace BitNow_Backend.BLL.Services
             }
         }
 
+        public async Task ClearAllVectorsAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _logger.LogWarning("Starting deletion of ALL vectors from Pinecone");
+
+                await _pineconeService.DeleteAllVectorsAsync(cancellationToken);
+
+                _logger.LogWarning("Successfully deleted all vectors from Pinecone");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing all vectors from Pinecone");
+                throw;
+            }
+        }
+
         private static string BuildItemText(ItemResponseDto item)
         {
             var parts = new List<string>();
@@ -195,4 +217,3 @@ namespace BitNow_Backend.BLL.Services
         }
     }
 }
-
