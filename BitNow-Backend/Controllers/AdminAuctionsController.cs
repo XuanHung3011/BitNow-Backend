@@ -198,7 +198,9 @@ public class AdminAuctionsController : ControllerBase
 
             if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
             {
-                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
+                var notificationTime = DateTime.UtcNow;
+                var formattedTime = FormatNotificationTimestamp(notificationTime);
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị tạm dừng bởi Admin vào lúc {formattedTime}.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
                 try
                 {
                     // Gửi thông báo cho seller, bidders và watchlist users
@@ -265,8 +267,10 @@ public class AdminAuctionsController : ControllerBase
 
             try
             {
+                var notificationTime = DateTime.UtcNow;
+                var formattedTime = FormatNotificationTimestamp(notificationTime);
                 var note = string.IsNullOrWhiteSpace(request?.Reason) ? string.Empty : $"\nGhi chú: {request!.Reason!.Trim()}";
-                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin.{note}";
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã được mở lại bởi Admin vào lúc {formattedTime}.{note}";
                 
                 // Gửi thông báo cho seller, bidders và watchlist users
                 await NotifyAuctionParticipantsAsync(id, auction.SellerId, message, "auction-resumed", $"/auction/{id}");
@@ -330,8 +334,14 @@ public class AdminAuctionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error notifying auction participants for auction {AuctionId}", auctionId);
-            // Không throw exception để không ảnh hưởng đến flow chính
+          
         }
+    }
+
+    private static string FormatNotificationTimestamp(DateTime utcTime)
+    {
+        var localTime = utcTime.ToLocalTime();
+        return localTime.ToString("HH:mm dd/MM/yyyy");
     }
 
     public class UpdateAuctionStatusRequest

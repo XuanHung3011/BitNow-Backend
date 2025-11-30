@@ -12,7 +12,7 @@ namespace BitNow_Backend.BLL.Services
 	{
         private readonly IAuctionRepository _auctionRepository;
         private readonly IItemRepository _itemRepository;
-        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) { "draft", "active", "completed", "cancelled" };
+        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) { "draft", "active", "scheduled", "completed", "cancelled" };
 
         public AuctionService(IAuctionRepository auctionRepository, IItemRepository itemRepository)
         {
@@ -235,7 +235,12 @@ namespace BitNow_Backend.BLL.Services
                 throw new ArgumentException("Start time cannot be in the past");
             }
 
-            // Create auction with active status (auction starts immediately)
+            // Determine status based on start time
+            // If start time is in the future, set status to "scheduled"
+            // Otherwise, set status to "active"
+            string auctionStatus = startTimeLocal > nowLocal ? "scheduled" : "active";
+
+            // Create auction with appropriate status
             // Only set foreign key IDs, not navigation properties
             // Store times as local time (Vietnam time) - same as DateTime.Now
             var auction = new Auction
@@ -246,7 +251,7 @@ namespace BitNow_Backend.BLL.Services
                 BuyNowPrice = dto.BuyNowPrice,
                 StartTime = startTimeLocal, // Store as local time (Vietnam time)
                 EndTime = endTimeLocal, // Store as local time (Vietnam time)
-                Status = "active", // Set to active immediately when created
+                Status = auctionStatus, // Set to "scheduled" if start time is in future, "active" otherwise
                 BidCount = 0,
                 CurrentBid = null,
                 CreatedAt = DateTime.Now, // Local time (Vietnam time)

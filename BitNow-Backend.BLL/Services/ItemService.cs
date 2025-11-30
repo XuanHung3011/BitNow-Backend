@@ -167,6 +167,43 @@ namespace BitNow_Backend.BLL.Services
             // Reload with includes to get full data
             return await GetByIdAsync(createdItem.Id);
         }
+
+        public async Task<ItemResponseDto?> CreateDraftItemAsync(CreateItemDto dto, string? imagesPath = null)
+        {
+            // Validate required fields (less strict for draft)
+            if (string.IsNullOrWhiteSpace(dto.Title))
+            {
+                throw new ArgumentException("Title is required");
+            }
+
+            // Check if category exists
+            var categories = await _itemRepository.GetCategoriesAsync();
+            if (!categories.Any(c => c.Id == dto.CategoryId))
+            {
+                throw new ArgumentException("Category not found");
+            }
+
+            // Create item with draft status
+            var item = new Item
+            {
+                SellerId = dto.SellerId,
+                CategoryId = dto.CategoryId,
+                Title = dto.Title,
+                Description = dto.Description,
+                Images = imagesPath, // Store comma-separated paths
+                Condition = dto.Condition,
+                Location = dto.Location,
+                BasePrice = dto.BasePrice > 0 ? dto.BasePrice : 0, // Allow 0 for draft
+                Status = "draft",
+                CreatedAt = DateTime.Now
+            };
+
+            var createdItem = await _itemRepository.CreateAsync(item);
+
+            // Reload with includes to get full data
+            return await GetByIdAsync(createdItem.Id);
+        }
+
         private static ItemResponseDto MapToResponseDto(Item item)
         {
             // Lấy auction mới nhất của item (ưu tiên active, sau đó lấy bất kỳ)
@@ -207,9 +244,15 @@ namespace BitNow_Backend.BLL.Services
                 StartingBid = activeAuction?.StartingBid,
                 CurrentBid = activeAuction?.CurrentBid,
                 BidCount = activeAuction?.BidCount,
+                AuctionStartTime = activeAuction?.StartTime,
                 AuctionEndTime = activeAuction?.EndTime,
                 AuctionStatus = activeAuction?.Status
             };
+        }
+
+        public async Task<bool> DeleteItemAsync(int id)
+        {
+            return await _itemRepository.DeleteAsync(id);
         }
     }
 }

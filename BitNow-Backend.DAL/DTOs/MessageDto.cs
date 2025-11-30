@@ -37,5 +37,21 @@ namespace BitNow_Backend.DAL.DTOs
 		public int? AuctionId { get; set; }
 		public string? AuctionTitle { get; set; }
 	}
+
+	public class CreateAuctionChatMessageRequest
+	{
+		public int AuctionId { get; set; }
+		public int SenderId { get; set; }
+		public string Content { get; set; } = string.Empty;
+	}
+
+	public class AuctionChatMessageDto
+	{
+		public int Id { get; set; }
+		public string Alias { get; set; } = string.Empty;
+		public string Content { get; set; } = string.Empty;
+		public DateTime? SentAt { get; set; }
+		public bool IsMine { get; set; }
+	}
 }
 

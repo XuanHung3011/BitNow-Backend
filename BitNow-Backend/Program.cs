@@ -34,6 +34,7 @@ builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<IAuctionChatService, AuctionChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 

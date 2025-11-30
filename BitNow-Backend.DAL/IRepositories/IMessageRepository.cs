@@ -9,6 +9,7 @@ namespace BitNow_Backend.DAL.IRepositories
 		Task<IEnumerable<Message>> GetConversationsAsync(int userId);
 		Task<IEnumerable<Message>> GetUnreadMessagesAsync(int userId);
 		Task<IEnumerable<Message>> GetAllMessagesByUserIdAsync(int userId);
+		Task<IEnumerable<Message>> GetMessagesByAuctionAsync(int auctionId, int limit);
 		Task<Message> AddAsync(Message message);
 		Task<bool> MarkAsReadAsync(int messageId);
 		Task<int> GetUnreadCountAsync(int userId);

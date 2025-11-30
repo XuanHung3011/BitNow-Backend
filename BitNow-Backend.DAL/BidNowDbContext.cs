@@ -28,6 +28,9 @@ public partial class BidNowDbContext : DbContext
     public virtual DbSet<UserRole> UserRoles { get; set; }
     public virtual DbSet<Watchlist> Watchlists { get; set; }
     public virtual DbSet<EmailVerification> EmailVerifications { get; set; }
+    public virtual DbSet<Order> Orders { get; set; }
+    public virtual DbSet<Payment> Payments { get; set; }
+    public virtual DbSet<Dispute> Disputes { get; set; }
     public virtual DbSet<SearchKeyword> SearchKeywords { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
@@ -284,6 +287,80 @@ public partial class BidNowDbContext : DbContext
                   .HasForeignKey(e => e.UserId)
                   .OnDelete(DeleteBehavior.Cascade)
                   .HasConstraintName("FK_SearchKeywords_Users");
+        });
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Orders__3213E83F");
+            entity.ToTable("Orders");
+            entity.HasIndex(e => e.AuctionId, "idx_orders_auction");
+            entity.HasIndex(e => e.BuyerId, "idx_orders_buyer");
+            entity.HasIndex(e => e.SellerId, "idx_orders_seller");
+            entity.HasIndex(e => e.OrderStatus, "idx_orders_status");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AuctionId).HasColumnName("auction_id");
+            entity.Property(e => e.BuyerId).HasColumnName("buyer_id");
+            entity.Property(e => e.SellerId).HasColumnName("seller_id");
+            entity.Property(e => e.FinalPrice).HasColumnType("decimal(18, 2)").HasColumnName("final_price");
+            entity.Property(e => e.OrderStatus).HasMaxLength(50).HasColumnName("order_status");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.CancelledAt).HasColumnName("cancelled_at");
+            entity.Property(e => e.CancelReason).HasMaxLength(500).HasColumnName("cancel_reason");
+            entity.Property(e => e.TrackingNumber).HasMaxLength(255).HasColumnName("tracking_number");
+            entity.Property(e => e.ShippingCompany).HasMaxLength(100).HasColumnName("shipping_company");
+            entity.Property(e => e.ShippedAt).HasColumnName("shipped_at");
+            entity.Property(e => e.ShippingAddress).HasMaxLength(500).HasColumnName("shipping_address");
+            entity.HasOne(d => d.Auction).WithMany().HasForeignKey(d => d.AuctionId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Orders__auction__6A30C649");
+            entity.HasOne(d => d.Buyer).WithMany(u => u.OrdersAsBuyer).HasForeignKey(d => d.BuyerId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Orders__buyer_id__6B24EA82");
+            entity.HasOne(d => d.Seller).WithMany(u => u.OrdersAsSeller).HasForeignKey(d => d.SellerId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Orders__seller_i__6C190EBB");
+        });
+
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Payments__3213E83F");
+            entity.ToTable("Payments");
+            entity.HasIndex(e => e.OrderId, "UQ__Payments__order_id").IsUnique();
+            entity.HasIndex(e => e.PaymentStatus, "idx_payments_status");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)").HasColumnName("amount");
+            entity.Property(e => e.PaymentStatus).HasMaxLength(50).HasColumnName("payment_status");
+            entity.Property(e => e.PaymentMethod).HasMaxLength(50).HasColumnName("payment_method");
+            entity.Property(e => e.TransactionId).HasMaxLength(255).HasColumnName("transaction_id");
+            entity.Property(e => e.PaymentProvider).HasMaxLength(100).HasColumnName("payment_provider");
+            entity.Property(e => e.PaidAt).HasColumnName("paid_at");
+            entity.Property(e => e.ReleasedAt).HasColumnName("released_at");
+            entity.Property(e => e.RefundedAt).HasColumnName("refunded_at");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.Notes).HasMaxLength(1000).HasColumnName("notes");
+            entity.HasOne(d => d.Order).WithOne(p => p.Payment).HasForeignKey<Payment>(d => d.OrderId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK__Payments__order___6D0D32F4");
+        });
+
+        modelBuilder.Entity<Dispute>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Disputes__3213E83F");
+            entity.ToTable("Disputes");
+            entity.HasIndex(e => e.OrderId, "UQ__Disputes__order_id").IsUnique();
+            entity.HasIndex(e => e.Status, "idx_disputes_status");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.BuyerId).HasColumnName("buyer_id");
+            entity.Property(e => e.SellerId).HasColumnName("seller_id");
+            entity.Property(e => e.Reason).HasMaxLength(500).HasColumnName("reason");
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.Status).HasMaxLength(50).HasColumnName("status");
+            entity.Property(e => e.Resolution).HasMaxLength(50).HasColumnName("resolution");
+            entity.Property(e => e.ResolvedBy).HasColumnName("resolved_by");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())").HasColumnName("created_at");
+            entity.Property(e => e.ResolvedAt).HasColumnName("resolved_at");
+            entity.Property(e => e.ClosedAt).HasColumnName("closed_at");
+            entity.Property(e => e.AdminNotes).HasColumnName("admin_notes");
+            entity.HasOne(d => d.Order).WithOne(p => p.Dispute).HasForeignKey<Dispute>(d => d.OrderId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK__Disputes__order__6EF57B66");
+            entity.HasOne(d => d.Buyer).WithMany(u => u.DisputesAsBuyer).HasForeignKey(d => d.BuyerId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Disputes__buyer___6FE99F9F");
+            entity.HasOne(d => d.Seller).WithMany(u => u.DisputesAsSeller).HasForeignKey(d => d.SellerId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Disputes__selle__70DDC3D8");
+            entity.HasOne(d => d.Resolver).WithMany(u => u.DisputesResolved).HasForeignKey(d => d.ResolvedBy).HasConstraintName("FK__Disputes__resolv__71D1E811");
         });
 
         OnModelCreatingPartial(modelBuilder);
