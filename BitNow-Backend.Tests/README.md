@@ -12,6 +12,7 @@ BitNow-Backend.Tests/
 │   ├── AuthControllerTests.cs
 │   ├── AuctionsControllerTests.cs
 │   ├── CategoriesControllerTests.cs
+│   ├── MessagesControllerTests.cs
 │   └── UsersControllerTests.cs
 └── README.md
 ```
@@ -42,7 +43,7 @@ dotnet test --filter "FullyQualifiedName~AuthControllerTests"
 
 ## Test Coverage
 
-Hiện tại project có **53 tests** cho các controllers:
+Hiện tại project có **68 tests** cho các controllers:
 
 - **AuthController**: 11 tests
   - Register (valid/invalid/duplicate email)
@@ -79,6 +80,14 @@ Hiện tại project có **53 tests** cho các controllers:
   - Add/Remove role
   - Search users
   - Validate credentials
+
+- **MessagesController**: 15 tests
+  - Send message (valid/invalid/null/ArgumentException/Exception)
+  - Get conversations
+  - Get conversation (with/without auctionId)
+  - Mark as read (valid/not found/Exception)
+  - Get unread messages
+  - Get all messages
 
 ## Lưu ý
 
