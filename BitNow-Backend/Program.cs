@@ -67,6 +67,9 @@ builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 // HttpClient (dùng cho OpenAI)
 builder.Services.AddHttpClient("OpenAI");
 
+// Background Service for Auction Status Updates
+builder.Services.AddHostedService<AuctionStatusUpdateService>();
+
 
 // Add services to the container.
 builder.Services.AddControllers();
