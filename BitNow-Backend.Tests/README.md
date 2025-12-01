@@ -13,6 +13,9 @@ BitNow-Backend.Tests/
 │   ├── AuctionsControllerTests.cs
 │   ├── CategoriesControllerTests.cs
 │   ├── MessagesControllerTests.cs
+│   ├── AdminAuctionsControllerTests.cs
+│   ├── AdminStatsControllerTests.cs
+│   ├── AuctionMessagesControllerTests.cs
 │   └── UsersControllerTests.cs
 └── README.md
 ```
@@ -43,7 +46,7 @@ dotnet test --filter "FullyQualifiedName~AuthControllerTests"
 
 ## Test Coverage
 
-Hiện tại project có **68 tests** cho các controllers:
+Hiện tại project có **82 tests** cho các controllers:
 
 - **AuthController**: 11 tests
   - Register (valid/invalid/duplicate email)
@@ -88,6 +91,20 @@ Hiện tại project có **68 tests** cho các controllers:
   - Mark as read (valid/not found/Exception)
   - Get unread messages
   - Get all messages
+
+- **AdminAuctionsController**: 16 tests
+  - GetAuctions (valid params/invalid sortBy/invalid sortOrder/invalid statuses/Exception)
+  - GetAuctionDetail (existing/not found/Exception)
+  - UpdateStatus (missing status/invalid status/not found/cancelled invalid reason/cancelled invalid signature/valid completed/ArgumentException)
+  - ResumeAuction (not found/status not cancelled/end time passed/valid/Exception)
+
+- **AdminStatsController**: 4 tests
+  - GetAdminStats (success/Exception)
+  - GetAdminStatsDetail (success/Exception)
+
+- **AuctionMessagesController**: 6 tests
+  - GetMessages (success/ArgumentException/Exception)
+  - CreateMessage (success/ArgumentException/Exception)
 
 ## Lưu ý
 
