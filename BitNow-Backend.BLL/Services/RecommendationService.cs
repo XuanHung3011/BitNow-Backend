@@ -160,8 +160,7 @@ namespace BitNow_Backend.BLL.Services
                 userId,
                 recommendedItems.Select(i => new {
                     AuctionId = i.AuctionId,
-                    Title = i.Title,
-                    Category = i.CategoryName,
+                    Title = i.Title,                  
                     Score = scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f).ToString("F3")
                 }));
 
