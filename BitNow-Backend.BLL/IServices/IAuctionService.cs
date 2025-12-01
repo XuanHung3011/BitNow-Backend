@@ -15,5 +15,7 @@ namespace BitNow_Backend.BLL.IServices
         Task<PaginatedResult<BuyerWonAuctionDto>> GetWonAuctionsByBuyerAsync(int bidderId, int page = 1, int pageSize = 10);
 
         Task<List<SellerAuctionDto>> GetAuctionsBySellerAsync(int sellerId);
+
+        Task<IEnumerable<ItemResponseDto>> GetItemsByAuctionIdsAsync(IEnumerable<int> auctionIds);
     }
 }

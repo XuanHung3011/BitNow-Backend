@@ -101,7 +101,7 @@ namespace BitNow_Backend.BLL.Services
             }
         }
 
-        
+
 
         public async Task SyncActiveAuctionsAsync(CancellationToken cancellationToken = default)
         {
@@ -110,14 +110,16 @@ namespace BitNow_Backend.BLL.Services
                 _logger.LogInformation("Starting sync of active auctions to Pinecone");
 
                 var allItems = await _itemService.GetAllApprovedItemsAsync();
+
                 var activeItems = allItems
                     .Where(i =>
                         i.AuctionId.HasValue &&
-                        string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
+                        new[] { "active", "scheduled" }
+                            .Contains(i.AuctionStatus?.ToLower()) &&
                         (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.UtcNow))
                     .ToList();
 
-                _logger.LogInformation("Found {Count} active auctions to sync", activeItems.Count);
+                _logger.LogInformation("Found {Count} active/scheduled auctions to sync", activeItems.Count);
 
                 var successCount = 0;
                 var errorCount = 0;
@@ -147,6 +149,7 @@ namespace BitNow_Backend.BLL.Services
             }
         }
 
+
         public async Task SyncAuctionAsync(ItemResponseDto item, CancellationToken cancellationToken = default)
         {
             if (item.AuctionId == null)
@@ -164,7 +167,7 @@ namespace BitNow_Backend.BLL.Services
                 var embedding = await GenerateEmbeddingAsync(textRepresentation, cancellationToken);
                 _logger.LogInformation("Generated embedding with {Dimensions} dimensions", embedding.Length);
 
-                // Chuẩn bị metadata (loại bỏ basePrice, currentBid, category)
+                // Chuẩn bị metadata 
                 var metadata = new Dictionary<string, object>
                 {
                     { "itemId", item.Id },

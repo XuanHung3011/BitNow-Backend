@@ -441,5 +441,46 @@ namespace BitNow_Backend.BLL.Services
 
             return result;
         }
+
+        public async Task<IEnumerable<ItemResponseDto>> GetItemsByAuctionIdsAsync(IEnumerable<int> auctionIds)
+        {
+            var auctions = await _auctionRepository.GetAuctionsByIdsAsync(auctionIds);
+
+            return auctions.Select(a => new ItemResponseDto
+            {
+                Id = a.Item.Id,
+                Title = a.Item.Title,
+                Description = a.Item.Description,
+                BasePrice = a.Item.BasePrice,
+                Condition = a.Item.Condition,
+                Images = a.Item.Images,
+                Location = a.Item.Location,
+                Status = a.Item.Status,
+                CreatedAt = a.Item.CreatedAt,
+
+                // Category Info
+                CategoryId = a.Item.CategoryId,
+                CategoryName = a.Item.Category?.Name,
+                CategorySlug = a.Item.Category?.Slug,
+                CategoryIcon = a.Item.Category?.Icon,
+
+                // Seller Info
+                SellerId = a.Item.SellerId,
+                SellerName = a.Seller?.FullName,
+                SellerEmail = a.Seller?.Email,
+                SellerAvatar = a.Seller?.AvatarUrl,
+                SellerReputationScore = a.Seller?.ReputationScore,
+                SellerTotalSales = a.Seller?.TotalSales,
+
+                // Auction Info
+                AuctionId = a.Id,
+                StartingBid = a.StartingBid,
+                CurrentBid = a.CurrentBid,
+                BidCount = a.BidCount,
+                AuctionStartTime = a.StartTime,
+                AuctionEndTime = a.EndTime,
+                AuctionStatus = a.Status
+            }).ToList();
+        }
     }
 }

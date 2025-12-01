@@ -14,9 +14,10 @@ namespace BitNow_Backend.BLL.Services
         private readonly ISearchKeywordService _searchKeywordService;
         private readonly IVectorSyncService _vectorSyncService;
         private readonly IPineconeService _pineconeService;
+        private readonly IAuctionService _auctionService;
         private readonly ILogger<RecommendationService> _logger;
 
-        // Ngưỡng điểm tương đồng tối thiểu (0.0 - 1.0)
+        // Ngưỡng điểm tương đồng tối thiểu 
         private const float SIMILARITY_THRESHOLD = 0.5f;
 
         public RecommendationService(
@@ -26,6 +27,7 @@ namespace BitNow_Backend.BLL.Services
             ISearchKeywordService searchKeywordService,
             IVectorSyncService vectorSyncService,
             IPineconeService pineconeService,
+            IAuctionService auctionService,
             ILogger<RecommendationService> logger)
         {
             _itemService = itemService;
@@ -34,6 +36,7 @@ namespace BitNow_Backend.BLL.Services
             _searchKeywordService = searchKeywordService;
             _vectorSyncService = vectorSyncService;
             _pineconeService = pineconeService;
+            _auctionService = auctionService;
             _logger = logger;
         }
 
@@ -74,7 +77,7 @@ namespace BitNow_Backend.BLL.Services
             var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems, searchKeywords);
             _logger.LogInformation("User {UserId} textbuyer:\n{TextBuyer}", userId, textbuyer);
 
-            // ✅ Gọi GenerateEmbeddingAsync từ VectorSyncService
+            //  Gọi GenerateEmbeddingAsync từ VectorSyncService
             var queryVector = await _vectorSyncService.GenerateEmbeddingAsync(textbuyer, cancellationToken);
 
             // Query Pinecone với filter
@@ -85,7 +88,7 @@ namespace BitNow_Backend.BLL.Services
                 {
                     new Dictionary<string, object>
                     {
-                        ["status"] = new Dictionary<string, object> { ["$eq"] = "active" }
+                        ["status"] = new Dictionary<string, object> { ["$in"] = new[] { "active", "scheduled" } }
                     },
                     new Dictionary<string, object>
                     {
@@ -143,20 +146,15 @@ namespace BitNow_Backend.BLL.Services
             );
 
             // Lấy items và sort theo similarity score
-            var allApprovedItems = await _itemService.GetAllApprovedItemsAsync();
-            var currentTime = DateTime.UtcNow;
+            var items = await _auctionService.GetItemsByAuctionIdsAsync(auctionIds);
+            
 
-            var recommendedItems = allApprovedItems
-                .Where(i =>
-                    i.AuctionId.HasValue &&
-                    auctionIds.Contains(i.AuctionId.Value) &&
-                    string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
-                    (!i.AuctionEndTime.HasValue || i.AuctionEndTime > currentTime))
-                .OrderByDescending(i => scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f))
-                .Take(limit)
-                .ToList();
+            var recommendedItems = items
+            .Where(i => i.AuctionId.HasValue)
+            .OrderByDescending(i => scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f))
+            .Take(limit)
+            .ToList();
 
-            // Log final recommendations
             _logger.LogInformation(
                 "User {UserId}: Returning {@Items}",
                 userId,

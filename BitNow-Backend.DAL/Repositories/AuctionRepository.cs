@@ -263,5 +263,29 @@ namespace BitNow_Backend.DAL.Repositories
                 .OrderByDescending(a => a.StartTime)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Auction>> GetAuctionsByIdsAsync(IEnumerable<int> auctionIds)
+        {
+            if (auctionIds == null || !auctionIds.Any())
+            {
+                return Enumerable.Empty<Auction>();
+            }
+
+            var now = DateTime.UtcNow;
+
+            var allowedStatuses = new[] { "active", "scheduled" };
+
+            return await _context.Auctions
+                .Include(a => a.Item)
+                    .ThenInclude(i => i.Category)
+                .Include(a => a.Seller)
+                .Where(a =>
+                    auctionIds.Contains(a.Id) &&
+                    a.Status != null && allowedStatuses.Contains(a.Status.ToLower()) &&
+                    a.Item.Status == "approved" &&
+                    a.EndTime > now
+                )
+                .ToListAsync();
+        }
     }
 }

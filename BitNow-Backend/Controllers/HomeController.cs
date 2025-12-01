@@ -84,20 +84,15 @@ namespace BitNow_Backend.Controllers
         /// </summary>
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<ItemResponseDto>>> SearchItems(
-            [FromQuery] string searchTerm,
-            [FromQuery] int? userId = null)
+            [FromQuery] string searchTerm
+
+            )
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(searchTerm))
                 {
                     return BadRequest(new { message = "Search term is required" });
-                }
-
-                // Nếu user đã đăng nhập (có userId) thì lưu từ khóa tìm kiếm vào bảng SearchKeywords
-                if (userId.HasValue && userId.Value > 0)
-                {
-                    await _searchKeywordService.LogSearchAsync(userId.Value, searchTerm);
                 }
 
                 var items = await _itemService.SearchApprovedItemsAsync(searchTerm);
