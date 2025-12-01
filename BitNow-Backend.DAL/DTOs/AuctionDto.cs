@@ -29,6 +29,7 @@ namespace BitNow_Backend.DAL.DTOs
 	{
 		public int Id { get; set; }
 		public string ItemTitle { get; set; } = null!;
+		public string? ItemImages { get; set; } // Images from the item
 		public string? SellerName { get; set; }
 		public string? CategoryName { get; set; }
 		public decimal StartingBid { get; set; }
