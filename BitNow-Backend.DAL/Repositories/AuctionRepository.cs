@@ -44,7 +44,7 @@ namespace BitNow_Backend.DAL.Repositories
                 );
             }
 
-            // Filter by status
+            // Filter by status - filter based on actual time, not just Status field
             if (filter.Statuses != null && filter.Statuses.Any())
             {
                 var normalizedStatuses = filter.Statuses.Select(s => s.ToLower()).ToList();
@@ -265,6 +265,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .ToListAsync();
         }
 
+<<<<<<< HEAD
         public async Task<IEnumerable<Auction>> GetAuctionsByIdsAsync(IEnumerable<int> auctionIds)
         {
             if (auctionIds == null || !auctionIds.Any())
@@ -287,6 +288,87 @@ namespace BitNow_Backend.DAL.Repositories
                     a.EndTime > now
                 )
                 .ToListAsync();
+=======
+        public async Task<int> UpdateScheduledToActiveAsync()
+        {
+            var now = DateTime.Now; // Use local time (Vietnam time)
+            // Find auctions that should be active:
+            // Status is "scheduled" and StartTime has passed (but EndTime hasn't)
+            var scheduledAuctions = await _context.Auctions
+                .Where(a => a.Status != null && 
+                           a.Status.ToLower() == "scheduled" &&
+                           a.StartTime <= now &&
+                           a.EndTime > now)
+                .ToListAsync();
+
+            foreach (var auction in scheduledAuctions)
+            {
+                auction.Status = "active";
+            }
+
+            if (scheduledAuctions.Any())
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return scheduledAuctions.Count;
+        }
+
+        public async Task<int> UpdateActiveToCompletedAsync()
+        {
+            var now = DateTime.Now; // Use local time (Vietnam time)
+            var activeAuctions = await _context.Auctions
+                .Where(a => a.Status != null && 
+                           a.Status.ToLower() == "active" &&
+                           a.EndTime <= now)
+                .ToListAsync();
+
+            foreach (var auction in activeAuctions)
+            {
+                auction.Status = "completed";
+            }
+
+            if (activeAuctions.Any())
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return activeAuctions.Count;
+        }
+
+        public async Task<bool> UpdateAuctionStatusIfNeededAsync(int auctionId)
+        {
+            var now = DateTime.Now; // Use local time (Vietnam time)
+            var auction = await _context.Auctions.FirstOrDefaultAsync(a => a.Id == auctionId);
+            
+            if (auction == null || auction.Status == null)
+            {
+                return false;
+            }
+
+            var statusLower = auction.Status.ToLower();
+            bool updated = false;
+
+            // Update scheduled to active if StartTime has passed
+            if (statusLower == "scheduled" && auction.StartTime <= now && auction.EndTime > now)
+            {
+                auction.Status = "active";
+                updated = true;
+            }
+            // Update active to completed if EndTime has passed
+            else if (statusLower == "active" && auction.EndTime <= now)
+            {
+                auction.Status = "completed";
+                updated = true;
+            }
+
+            if (updated)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return updated;
+>>>>>>> d1e4d9e941fc5effafd5e75fb5fed6ff8488fe83
         }
     }
 }

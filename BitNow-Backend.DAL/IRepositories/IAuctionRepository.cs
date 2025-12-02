@@ -18,6 +18,13 @@ namespace BitNow_Backend.DAL.IRepositories
 
         Task<IEnumerable<Auction>> GetAuctionsBySellerAsync(int sellerId);
 
+
         Task<IEnumerable<Auction>> GetAuctionsByIdsAsync(IEnumerable<int> auctionIds);
+
+      
+        Task<int> UpdateScheduledToActiveAsync();
+        Task<int> UpdateActiveToCompletedAsync();
+        Task<bool> UpdateAuctionStatusIfNeededAsync(int auctionId);
+
     }
 }

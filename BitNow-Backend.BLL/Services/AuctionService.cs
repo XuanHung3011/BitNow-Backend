@@ -31,6 +31,9 @@ namespace BitNow_Backend.BLL.Services
 
         public async Task<AuctionDetailDto?> GetDetailAsync(int id)
 		{
+			// Update status if needed before returning (lazy update)
+			await _auctionRepository.UpdateAuctionStatusIfNeededAsync(id);
+			
 			var a = await _auctionRepository.GetByIdAsync(id);
 			if (a == null) return null;
 			return new AuctionDetailDto
@@ -59,11 +62,12 @@ namespace BitNow_Backend.BLL.Services
         public async Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
 		{
 			var (auctions, totalCount) = await _auctionRepository.GetAuctionsWithFilterAsync(filter);
-			var now = DateTime.Now;
+			var now = DateTime.Now; // Use local time (Vietnam time) - matches database storage
 
 			var items = auctions.Select(a =>
 			{
-				// Determine display status
+				// Determine display status based on actual time, not just Status field
+				// Priority: cancelled > draft > scheduled > active > completed
 				string displayStatus;
                 if (a.Status != null && a.Status.Equals("paused", StringComparison.OrdinalIgnoreCase))
                 {
@@ -73,34 +77,54 @@ namespace BitNow_Backend.BLL.Services
                 {
                     displayStatus = "cancelled";
 				}
-				else if (a.Status != null && a.Status.ToLower() == "active")
+				// 2. Draft: status = "draft"
+				else if (a.Status != null && a.Status.ToLower() == "draft")
 				{
-					if (a.StartTime > now)
-					{
-						displayStatus = "scheduled";
-					}
-					else if (a.EndTime > now)
-					{
-						displayStatus = "active";
-					}
-					else
-					{
-						displayStatus = "completed";
-					}
+					displayStatus = "draft";
 				}
-				else if (a.EndTime < now || (a.Status != null && a.Status.ToLower() == "completed"))
+				// 3. Scheduled: Chưa đến giờ bắt đầu (StartTime > now)
+				else if (a.StartTime > now)
+				{
+					displayStatus = "scheduled";
+				}
+				// 4. Active: Đã bắt đầu và chưa kết thúc (StartTime <= now && EndTime > now)
+				else if (a.StartTime <= now && a.EndTime > now)
+				{
+					displayStatus = "active";
+				}
+				// 5. Completed: Đã kết thúc (EndTime <= now)
+				else if (a.EndTime <= now)
 				{
 					displayStatus = "completed";
 				}
+				// Fallback: Use status field if time logic doesn't match
 				else
 				{
 					displayStatus = a.Status?.ToLower() ?? "unknown";
+				}
+
+				// Parse images from item
+				var itemImages = a.Item?.Images;
+				var firstImage = "";
+				if (!string.IsNullOrEmpty(itemImages))
+				{
+					try
+					{
+						var imageList = System.Text.Json.JsonSerializer.Deserialize<List<string>>(itemImages);
+						firstImage = imageList?.FirstOrDefault() ?? "";
+					}
+					catch
+					{
+						// If not JSON, try comma-separated
+						firstImage = itemImages.Split(',').FirstOrDefault()?.Trim() ?? "";
+					}
 				}
 
 				return new AuctionListItemDto
 				{
 					Id = a.Id,
 					ItemTitle = a.Item?.Title ?? "",
+					ItemImages = itemImages, // Include full images string for frontend to parse
 					SellerName = a.Seller?.FullName,
 					CategoryName = a.Item?.Category?.Name,
 					StartingBid = a.StartingBid,
@@ -272,6 +296,10 @@ namespace BitNow_Backend.BLL.Services
             };
 
             var createdAuction = await _auctionRepository.CreateAsync(auction);
+
+            // Update item status to "archived" so it won't appear in "approved items" list anymore
+            // Item has been used for auction, so it should not be available for creating another auction
+            await _itemRepository.UpdateItemStatusAsync(dto.ItemId, "archived");
 
             return new AuctionResponseDto
             {

@@ -32,6 +32,7 @@ public partial class BidNowDbContext : DbContext
     public virtual DbSet<Payment> Payments { get; set; }
     public virtual DbSet<Dispute> Disputes { get; set; }
     public virtual DbSet<SearchKeyword> SearchKeywords { get; set; }
+    public virtual DbSet<UserAuctionView> UserAuctionViews { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -361,6 +362,37 @@ public partial class BidNowDbContext : DbContext
             entity.HasOne(d => d.Buyer).WithMany(u => u.DisputesAsBuyer).HasForeignKey(d => d.BuyerId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Disputes__buyer___6FE99F9F");
             entity.HasOne(d => d.Seller).WithMany(u => u.DisputesAsSeller).HasForeignKey(d => d.SellerId).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK__Disputes__selle__70DDC3D8");
             entity.HasOne(d => d.Resolver).WithMany(u => u.DisputesResolved).HasForeignKey(d => d.ResolvedBy).HasConstraintName("FK__Disputes__resolv__71D1E811");
+        });
+
+        modelBuilder.Entity<UserAuctionView>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__UserAuct__3213E83F");
+            entity.ToTable("UserAuctionViews");
+            entity.HasIndex(e => new { e.UserId, e.AuctionId }, "idx_user_auction_views_user_auction");
+            entity.HasIndex(e => e.ViewedAt, "idx_user_auction_views_viewed_at");
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+            entity.Property(e => e.AuctionId)
+                .HasColumnName("auction_id")
+                .IsRequired();
+            entity.Property(e => e.ViewedAt)
+                .HasColumnName("viewed_at")
+                .IsRequired()
+                .HasColumnType("datetime2(7)");
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK__UserAucti__user___7F2BE32F");
+            entity.HasOne(d => d.Auction)
+                .WithMany()
+                .HasForeignKey(d => d.AuctionId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK__UserAucti__aucti__00200768");
         });
 
         OnModelCreatingPartial(modelBuilder);

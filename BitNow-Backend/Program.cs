@@ -81,6 +81,9 @@ builder.Services.AddHttpClient("LMStudio");
 // HttpClient for Pinecone
 builder.Services.AddHttpClient("Pinecone");
 
+// Background Service for Auction Status Updates
+builder.Services.AddHostedService<AuctionStatusUpdateService>();
+
 
 // Add services to the container.
 builder.Services.AddControllers();
