@@ -16,7 +16,7 @@ public class AdminStatsService : IAdminStatsService
 
     public async Task<AdminStatsDto> GetAdminStatsAsync()
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var startOfWeek = now.AddDays(-(int)now.DayOfWeek).Date;
         var startOfMonth = new DateTime(now.Year, now.Month, 1);
         var startOfLastMonth = startOfMonth.AddMonths(-1);
@@ -89,7 +89,7 @@ public class AdminStatsService : IAdminStatsService
 
     public async Task<AdminStatsDetailDto> GetAdminStatsDetailAsync(string type)
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var chartData = new List<ChartDataPoint>();
         var summary = new Dictionary<string, object>();
 

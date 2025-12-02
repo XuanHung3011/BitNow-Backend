@@ -608,7 +608,7 @@ namespace BitNow_Backend.Controllers
             {
                 itemId,
                 status,
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.Now
             };
 
             await _auctionHub.Clients.Group(AuctionHub.AdminPendingGroup).SendAsync("AdminPendingItemsChanged", payload);

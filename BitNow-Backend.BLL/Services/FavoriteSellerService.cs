@@ -47,7 +47,7 @@ namespace BitNow_Backend.BLL.Services
             {
                 BuyerId = buyerId,
                 SellerId = sellerId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             var added = await _favoriteSellerRepository.AddAsync(favoriteSeller);

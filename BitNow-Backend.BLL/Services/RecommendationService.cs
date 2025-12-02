@@ -14,7 +14,7 @@ namespace BitNow_Backend.BLL.Services
         private readonly ISearchKeywordService _searchKeywordService;
         private readonly IVectorSyncService _vectorSyncService;
         private readonly IPineconeService _pineconeService;
-        private readonly IAuctionService _auctionService;
+        private readonly IAuctionService _auction_service;
         private readonly ILogger<RecommendationService> _logger;
 
         // Ngưỡng điểm tương đồng tối thiểu 
@@ -31,12 +31,12 @@ namespace BitNow_Backend.BLL.Services
             ILogger<RecommendationService> logger)
         {
             _itemService = itemService;
-            _bidService = bidService;
-            _watchlistService = watchlistService;
+            _bid_service = bidService;
+            _watchlist_service = watchlistService;
             _searchKeywordService = searchKeywordService;
             _vectorSyncService = vectorSyncService;
             _pineconeService = pineconeService;
-            _auctionService = auctionService;
+            _auction_service = auctionService;
             _logger = logger;
         }
 
@@ -147,7 +147,7 @@ namespace BitNow_Backend.BLL.Services
 
             // Lấy items và sort theo similarity score
             var items = await _auctionService.GetItemsByAuctionIdsAsync(auctionIds);
-            
+
 
             var recommendedItems = items
             .Where(i => i.AuctionId.HasValue)
@@ -160,7 +160,7 @@ namespace BitNow_Backend.BLL.Services
                 userId,
                 recommendedItems.Select(i => new {
                     AuctionId = i.AuctionId,
-                    Title = i.Title,                  
+                    Title = i.Title,
                     Score = scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f).ToString("F3")
                 }));
 
