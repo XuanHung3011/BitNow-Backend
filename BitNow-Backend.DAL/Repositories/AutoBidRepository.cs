@@ -26,7 +26,7 @@ namespace BitNow_Backend.DAL.Repositories
 			{
 				existing.MaxAmount = autoBid.MaxAmount;
 				existing.IsActive = autoBid.IsActive;
-				existing.CreatedAt = autoBid.CreatedAt ?? DateTime.UtcNow;
+				existing.CreatedAt = autoBid.CreatedAt ?? DateTime.Now;
 				_ctx.AutoBids.Update(existing);
 				await _ctx.SaveChangesAsync();
 				return existing;
@@ -34,7 +34,7 @@ namespace BitNow_Backend.DAL.Repositories
 			else
 			{
 				if (autoBid.CreatedAt == null)
-					autoBid.CreatedAt = DateTime.UtcNow;
+					autoBid.CreatedAt = DateTime.Now;
 				_ctx.AutoBids.Add(autoBid);
 				await _ctx.SaveChangesAsync();
 				return autoBid;

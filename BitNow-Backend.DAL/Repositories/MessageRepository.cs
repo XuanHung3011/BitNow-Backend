@@ -102,7 +102,7 @@ namespace BitNow_Backend.DAL.Repositories
 
 		public async Task<Message> AddAsync(Message message)
 		{
-			message.SentAt = DateTime.UtcNow;
+			message.SentAt = DateTime.Now;
 			message.IsRead = false;
 			_context.Messages.Add(message);
 			await _context.SaveChangesAsync();

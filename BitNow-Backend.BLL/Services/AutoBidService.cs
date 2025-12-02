@@ -100,7 +100,7 @@ namespace BitNow_Backend.BLL.Services
 				UserId = userId,
 				MaxAmount = maxAmount,
 				IsActive = true,
-				CreatedAt = DateTime.UtcNow
+				CreatedAt = DateTime.Now
 			};
 
 			var result = await _autoBidRepository.CreateOrUpdateAsync(autoBid);

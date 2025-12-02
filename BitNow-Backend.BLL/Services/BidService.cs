@@ -54,7 +54,7 @@ namespace BitNow_Backend.BLL.Services
 			{
 				throw new InvalidOperationException("Auction not active");
 			}
-			if (auction.EndTime <= DateTime.UtcNow) throw new InvalidOperationException("Auction ended");
+			if (auction.EndTime <= DateTime.Now) throw new InvalidOperationException("Auction ended");
 			if (amount <= auction.CurrentBid || amount < auction.StartingBid) throw new InvalidOperationException("Bid too low");
 
 			// Create bid record
@@ -63,7 +63,7 @@ namespace BitNow_Backend.BLL.Services
 				AuctionId = auctionId,
 				BidderId = bidderId,
 				Amount = amount,
-				BidTime = DateTime.UtcNow,
+				BidTime = DateTime.Now,
 				IsAutoBid = isAutoBid
 			};
 			await _bidRepository.AddAsync(bid);
@@ -88,10 +88,10 @@ namespace BitNow_Backend.BLL.Services
 					BidderId = bidderId,
 					BidderName = bidderName,
 					Amount = amount,
-					BidTime = bid.BidTime ?? DateTime.UtcNow
+					BidTime = bid.BidTime ?? DateTime.Now
 				});
 				// Sorted set: score = ticks để đảm bảo trật tự thời gian tăng dần.
-				var ticks = (bid.BidTime ?? DateTime.UtcNow).Ticks;
+				var ticks = (bid.BidTime ?? DateTime.Now).Ticks;
 				_ = await db.SortedSetAddAsync(BidsKey(auctionId), bidJson, ticks);
 				// Giữ tối đa 100 bản ghi mới nhất, remove phần thừa phía đầu.
 				var length = await db.SortedSetLengthAsync(BidsKey(auctionId));
@@ -113,7 +113,7 @@ namespace BitNow_Backend.BLL.Services
 					BidderId = bidderId,
 					BidderName = bidderName,
 					Amount = amount,
-					BidTime = bid.BidTime ?? DateTime.UtcNow
+					BidTime = bid.BidTime ?? DateTime.Now
 				}
 			};
 
@@ -185,7 +185,7 @@ namespace BitNow_Backend.BLL.Services
 				BidderId = b.BidderId,
 				BidderName = b.Bidder?.FullName ?? $"User #{b.BidderId}",
 				Amount = b.Amount,
-				BidTime = b.BidTime ?? DateTime.UtcNow
+				BidTime = b.BidTime ?? DateTime.Now
 			}).ToList();
 		}
 
@@ -266,7 +266,7 @@ namespace BitNow_Backend.BLL.Services
                         ItemImages = item.ItemImages,
                         CategoryName = item.CategoryName,
                         YourBid = item.Bid.Amount,
-                        BidTime = item.Bid.BidTime ?? DateTime.UtcNow,
+                        BidTime = item.Bid.BidTime ?? DateTime.Now,
                         Status = status,
                         CurrentBid = item.AuctionCurrentBid,
                         EndTime = item.AuctionEndTime,

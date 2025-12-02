@@ -44,7 +44,7 @@ namespace BitNow_Backend.DAL.DTOs
 	public class AuctionFilterDto
 	{
 		public string? SearchTerm { get; set; }
-		public List<string>? Statuses { get; set; } // active, scheduled, completed, suspended
+		public List<string>? Statuses { get; set; } // active, scheduled, completed, paused
 		public string? SortBy { get; set; } = "EndTime"; // ItemTitle, EndTime, CurrentBid, BidCount
 		public string? SortOrder { get; set; } = "desc"; // asc, desc
 		public int Page { get; set; } = 1;
