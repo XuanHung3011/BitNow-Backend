@@ -56,6 +56,7 @@ namespace BitNow_Backend.DAL.Repositories
                         a.StartTime > now) ||
                     (normalizedStatuses.Contains("completed") && (a.EndTime < now ||
                         (a.Status != null && a.Status.ToLower() == "completed"))) ||
+                    (normalizedStatuses.Contains("paused") && a.Status != null && a.Status.ToLower() == "paused") ||
                     (normalizedStatuses.Contains("cancelled") && a.Status != null && a.Status.ToLower() == "cancelled")
                 );
             }
@@ -152,8 +153,8 @@ namespace BitNow_Backend.DAL.Repositories
 
                 auction.Status = status;
 
-                // Lưu thời gian tạm dừng khi status = "cancelled"
-                if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                // Lưu thời gian tạm dừng khi status = "paused"
+                if (string.Equals(status, "paused", StringComparison.OrdinalIgnoreCase))
                 {
                     auction.PausedAt = DateTime.Now;
                 }

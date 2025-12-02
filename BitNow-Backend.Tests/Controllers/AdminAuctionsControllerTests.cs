@@ -237,12 +237,12 @@ public class AdminAuctionsControllerTests
     }
 
     [Fact]
-    public async Task UpdateStatus_CancelledWithInvalidReason_ReturnsBadRequest()
+    public async Task UpdateStatus_PausedWithInvalidReason_ReturnsBadRequest()
     {
         // Arrange
         var request = new AdminAuctionsController.UpdateAuctionStatusRequest
         {
-            Status = "cancelled",
+            Status = "paused",
             Reason = "Too short",
             AdminSignature = "Admin"
         };
@@ -266,12 +266,12 @@ public class AdminAuctionsControllerTests
     }
 
     [Fact]
-    public async Task UpdateStatus_CancelledWithInvalidSignature_ReturnsBadRequest()
+    public async Task UpdateStatus_PausedWithInvalidSignature_ReturnsBadRequest()
     {
         // Arrange
         var request = new AdminAuctionsController.UpdateAuctionStatusRequest
         {
-            Status = "cancelled",
+            Status = "paused",
             Reason = "Nguyên nhân hợp lệ đủ dài",
             AdminSignature = "WrongSignature"
         };
@@ -382,7 +382,7 @@ public class AdminAuctionsControllerTests
     }
 
     [Fact]
-    public async Task ResumeAuction_WhenStatusIsNotCancelled_ReturnsBadRequest()
+    public async Task ResumeAuction_WhenStatusIsNotPaused_ReturnsBadRequest()
     {
         // Arrange
         var auction = new AuctionDetailDto
@@ -410,7 +410,7 @@ public class AdminAuctionsControllerTests
         var auction = new AuctionDetailDto
         {
             Id = 1,
-            Status = "cancelled",
+            Status = "paused",
             EndTime = DateTime.Now.AddMinutes(-5),
             SellerId = 10
         };
@@ -433,7 +433,7 @@ public class AdminAuctionsControllerTests
         {
             Id = 1,
             ItemTitle = "Item 1",
-            Status = "cancelled",
+            Status = "paused",
             EndTime = DateTime.Now.AddHours(1),
             SellerId = 10
         };
@@ -490,7 +490,7 @@ public class AdminAuctionsControllerTests
         var auction = new AuctionDetailDto
         {
             Id = 1,
-            Status = "cancelled",
+            Status = "paused",
             EndTime = DateTime.Now.AddHours(1),
             SellerId = 10
         };

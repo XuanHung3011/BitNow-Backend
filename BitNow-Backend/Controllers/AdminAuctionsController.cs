@@ -19,8 +19,8 @@ public class AdminAuctionsController : ControllerBase
     private readonly INotificationService _notificationService;
     private readonly IBidService _bidService;
     private readonly IWatchlistService _watchlistService;
-    private static readonly string[] ValidFilterStatuses = { "active", "scheduled", "completed", "cancelled" };
-    private static readonly string[] AllowedStatusUpdates = { "draft", "active", "completed", "cancelled" };
+    private static readonly string[] ValidFilterStatuses = { "active", "scheduled", "completed", "paused", "cancelled" };
+    private static readonly string[] AllowedStatusUpdates = { "draft", "active", "completed", "paused", "cancelled" };
 
     public AdminAuctionsController(
         IAuctionService auctionService,
@@ -42,7 +42,7 @@ public class AdminAuctionsController : ControllerBase
     /// Get all auctions with pagination, search, and status filtering
     /// </summary>
     /// <param name="searchTerm">Search by item title or seller name</param>
-    /// <param name="statuses">Filter by status: 'active', 'scheduled', 'completed', 'cancelled' (comma-separated for multiple)</param>
+    /// <param name="statuses">Filter by status: 'active', 'scheduled', 'completed', 'paused', 'cancelled' (comma-separated for multiple)</param>
     /// <param name="sortBy">Sort by: 'ItemTitle', 'EndTime', 'CurrentBid', 'BidCount' (default: 'EndTime')</param>
     /// <param name="sortOrder">Sort order: 'asc' or 'desc' (default: 'desc')</param>
     /// <param name="page">Page number (default: 1)</param>
@@ -140,7 +140,7 @@ public class AdminAuctionsController : ControllerBase
     }
 
     /// <summary>
-    /// Update auction status (draft, active, completed, cancelled)
+    /// Update auction status (draft, active, completed, paused, cancelled)
     /// </summary>
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateAuctionStatusRequest request)
@@ -164,11 +164,14 @@ public class AdminAuctionsController : ControllerBase
                 return NotFound(new { message = $"Auction with ID {id} not found" });
             }
 
-            if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            // Với trạng thái nhạy cảm (tạm dừng / hủy), yêu cầu lý do và chữ ký Admin
+            if (string.Equals(normalizedStatus, "paused", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
             {
                 if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 10)
                 {
-                    return BadRequest(new { message = "Nguyên nhân tạm dừng phải có ít nhất 10 ký tự." });
+                    var actionLabel = normalizedStatus == "cancelled" ? "hủy" : "tạm dừng";
+                    return BadRequest(new { message = $"Nguyên nhân {actionLabel} phải có ít nhất 10 ký tự." });
                 }
 
                 if (!string.Equals(request.AdminSignature?.Trim(), "Admin", StringComparison.OrdinalIgnoreCase))
@@ -196,7 +199,7 @@ public class AdminAuctionsController : ControllerBase
             // Broadcast cho auction group để frontend có thể real-time update
             await _auctionHub.Clients.Group($"auction-{id}").SendAsync("AuctionStatusUpdated", payload);
 
-            if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(normalizedStatus, "paused", StringComparison.OrdinalIgnoreCase))
             {
                 var notificationTime = DateTime.Now;
                 var formattedTime = FormatNotificationTimestamp(notificationTime);
@@ -209,6 +212,20 @@ public class AdminAuctionsController : ControllerBase
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to create suspension notification for auction {AuctionId}", auction.Id);
+                }
+            }
+            else if (string.Equals(normalizedStatus, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                var notificationTime = DateTime.Now;
+                var formattedTime = FormatNotificationTimestamp(notificationTime);
+                var message = $"Phiên đấu giá \"{auction.ItemTitle}\" đã bị hủy bởi Admin vào lúc {formattedTime}.\nLý do: {request.Reason?.Trim()}\nNgười phê duyệt: {request.AdminSignature?.Trim() ?? "Admin"}";
+                try
+                {
+                    await NotifyAuctionParticipantsAsync(id, auction.SellerId, message, "auction-cancelled", $"/auction/{id}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create cancel notification for auction {AuctionId}", auction.Id);
                 }
             }
 
@@ -236,7 +253,7 @@ public class AdminAuctionsController : ControllerBase
                 return NotFound(new { message = $"Auction with ID {id} not found" });
             }
 
-            if (!string.Equals(auction.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(auction.Status, "paused", StringComparison.OrdinalIgnoreCase))
             {
                 return BadRequest(new { message = "Chỉ có thể tiếp tục các phiên đấu giá đang bị tạm dừng." });
             }
