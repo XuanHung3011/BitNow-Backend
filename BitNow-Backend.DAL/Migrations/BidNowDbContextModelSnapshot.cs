@@ -1009,6 +1009,39 @@ namespace BitNow_Backend.DAL.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("BitNow_Backend.DAL.Models.UserAuctionView", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AuctionId")
+                        .HasColumnType("int")
+                        .HasColumnName("auction_id");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("ViewedAt")
+                        .HasColumnType("datetime2(7)")
+                        .HasColumnName("viewed_at");
+
+                    b.HasKey("Id")
+                        .HasName("PK__UserAuct__3213E83F");
+
+                    b.HasIndex("AuctionId");
+
+                    b.HasIndex(new[] { "UserId", "AuctionId" }, "idx_user_auction_views_user_auction");
+
+                    b.HasIndex(new[] { "ViewedAt" }, "idx_user_auction_views_viewed_at");
+
+                    b.ToTable("UserAuctionViews", (string)null);
+                });
+
             modelBuilder.Entity("BitNow_Backend.DAL.Models.UserRole", b =>
                 {
                     b.Property<int>("Id")
@@ -1348,6 +1381,27 @@ namespace BitNow_Backend.DAL.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("FK_SearchKeywords_Users");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BitNow_Backend.DAL.Models.UserAuctionView", b =>
+                {
+                    b.HasOne("BitNow_Backend.DAL.Models.Auction", "Auction")
+                        .WithMany()
+                        .HasForeignKey("AuctionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK__UserAucti__aucti__00200768");
+
+                    b.HasOne("BitNow_Backend.DAL.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK__UserAucti__user___7F2BE32F");
+
+                    b.Navigation("Auction");
 
                     b.Navigation("User");
                 });
