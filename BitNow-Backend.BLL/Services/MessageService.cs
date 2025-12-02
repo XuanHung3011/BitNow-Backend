@@ -33,7 +33,7 @@ namespace BitNow_Backend.BLL.Services
 				ReceiverId = request.ReceiverId,
 				AuctionId = request.AuctionId,
 				Content = request.Content,
-				SentAt = DateTime.UtcNow,
+				SentAt = DateTime.Now,
 				IsRead = false
 			};
 

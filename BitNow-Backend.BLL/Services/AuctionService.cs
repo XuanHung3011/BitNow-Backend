@@ -12,7 +12,16 @@ namespace BitNow_Backend.BLL.Services
 	{
         private readonly IAuctionRepository _auctionRepository;
         private readonly IItemRepository _itemRepository;
-        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) { "draft", "active", "scheduled", "completed", "cancelled" };
+        // Cho phép cả trạng thái tạm dừng (paused) và hủy (cancelled)
+        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) 
+        { 
+            "draft", 
+            "active", 
+            "scheduled", 
+            "completed", 
+            "paused",
+            "cancelled"
+        };
 
         public AuctionService(IAuctionRepository auctionRepository, IItemRepository itemRepository)
         {
@@ -60,9 +69,11 @@ namespace BitNow_Backend.BLL.Services
 				// Determine display status based on actual time, not just Status field
 				// Priority: cancelled > draft > scheduled > active > completed
 				string displayStatus;
-                
-                // 1. Cancelled: status = "cancelled"
-                if (a.Status != null && a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
+                if (a.Status != null && a.Status.Equals("paused", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "paused";
+                }
+                else if (a.Status != null && a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
                 {
                     displayStatus = "cancelled";
 				}
@@ -384,35 +395,40 @@ namespace BitNow_Backend.BLL.Services
         public async Task<List<SellerAuctionDto>> GetAuctionsBySellerAsync(int sellerId)
         {
             var auctions = await _auctionRepository.GetAuctionsBySellerAsync(sellerId);
-            var now = DateTime.Now; // Use local time (Vietnam time) - matches database storage
+            var now = DateTime.Now;
 
             var result = auctions.Select(a =>
             {
-                // Determine display status based on actual time, not just status field
-                // Priority: cancelled > draft > scheduled > active > completed
+                // Determine display status based on time, not just status field
+                // Priority: draft > paused > cancelled > scheduled > active > completed
                 string displayStatus;
                 
-                // 1. Cancelled: status = "cancelled"
-                if (a.Status != null && a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
-                {
-                    displayStatus = "cancelled";
-                }
-                // 2. Draft: status = "draft"
-                else if (a.Status != null && a.Status.ToLower() == "draft")
+                // 1. Draft: status = "draft"
+                if (a.Status != null && a.Status.ToLower() == "draft")
                 {
                     displayStatus = "draft";
                 }
-                // 3. Scheduled: Chưa đến giờ bắt đầu (StartTime > now)
+                // 2. Paused: status = "paused"
+                else if (a.Status != null && a.Status.Equals("paused", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "paused";
+                }
+                // 3. Cancelled: status = "cancelled"
+                else if (a.Status != null && a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "cancelled";
+                }
+                // 4. Scheduled: Chưa đến giờ bắt đầu (StartTime > now)
                 else if (a.StartTime > now)
                 {
                     displayStatus = "scheduled";
                 }
-                // 4. Active: Đã bắt đầu và chưa kết thúc (StartTime <= now && EndTime > now)
+                // 5. Active: Đã bắt đầu và chưa kết thúc (StartTime <= now && EndTime > now)
                 else if (a.StartTime <= now && a.EndTime > now)
                 {
                     displayStatus = "active";
                 }
-                // 5. Completed: Đã kết thúc (EndTime <= now)
+                // 6. Completed: Đã kết thúc (EndTime <= now)
                 else if (a.EndTime <= now)
                 {
                     displayStatus = "completed";

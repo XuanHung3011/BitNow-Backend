@@ -87,7 +87,7 @@ namespace BitNow_Backend.BLL.Services
 				SenderId = request.SenderId,
 				ReceiverId = receiverId,
 				Content = trimmedContent,
-				SentAt = DateTime.UtcNow,
+				SentAt = DateTime.Now,
 				IsRead = false
 			};
 

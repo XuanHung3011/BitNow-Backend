@@ -27,7 +27,7 @@ namespace BitNow_Backend.DAL.Repositories
 
         public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
         {
-            var now = DateTime.Now; // Use local time (Vietnam time) - matches database storage
+            var now = DateTime.Now;
             var query = _context.Auctions
                 .Include(a => a.Item)
                     .ThenInclude(i => i.Category)
@@ -50,27 +50,14 @@ namespace BitNow_Backend.DAL.Repositories
                 var normalizedStatuses = filter.Statuses.Select(s => s.ToLower()).ToList();
 
                 query = query.Where(a =>
-                    // Active: StartTime <= now && EndTime > now (and not cancelled/draft)
-                    (normalizedStatuses.Contains("active") && 
-                     a.Status != null && 
-                     !a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase) &&
-                     a.Status.ToLower() != "draft" &&
-                     a.StartTime <= now && 
-                     a.EndTime > now) ||
-                    // Scheduled: StartTime > now (and not cancelled/draft)
-                    (normalizedStatuses.Contains("scheduled") && 
-                     a.Status != null && 
-                     !a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase) &&
-                     a.Status.ToLower() != "draft" &&
-                     a.StartTime > now) ||
-                    // Completed: EndTime <= now (or Status = "completed")
-                    (normalizedStatuses.Contains("completed") && 
-                     (a.EndTime <= now || 
-                      (a.Status != null && a.Status.ToLower() == "completed"))) ||
-                    // Cancelled: Status = "cancelled"
-                    (normalizedStatuses.Contains("cancelled") && 
-                     a.Status != null && 
-                     a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase))
+                    (normalizedStatuses.Contains("active") && a.Status != null && a.Status.ToLower() == "active" &&
+                        a.StartTime <= now && a.EndTime > now) ||
+                    (normalizedStatuses.Contains("scheduled") && a.Status != null && a.Status.ToLower() == "active" &&
+                        a.StartTime > now) ||
+                    (normalizedStatuses.Contains("completed") && (a.EndTime < now ||
+                        (a.Status != null && a.Status.ToLower() == "completed"))) ||
+                    (normalizedStatuses.Contains("paused") && a.Status != null && a.Status.ToLower() == "paused") ||
+                    (normalizedStatuses.Contains("cancelled") && a.Status != null && a.Status.ToLower() == "cancelled")
                 );
             }
 
@@ -166,10 +153,10 @@ namespace BitNow_Backend.DAL.Repositories
 
                 auction.Status = status;
 
-                // Lưu thời gian tạm dừng khi status = "cancelled"
-                if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                // Lưu thời gian tạm dừng khi status = "paused"
+                if (string.Equals(status, "paused", StringComparison.OrdinalIgnoreCase))
                 {
-                    auction.PausedAt = DateTime.UtcNow;
+                    auction.PausedAt = DateTime.Now;
                 }
 
                 await _context.SaveChangesAsync();
@@ -195,7 +182,7 @@ namespace BitNow_Backend.DAL.Repositories
                 // Kiểm tra nếu có thời gian tạm dừng, tính và cộng vào EndTime
                 if (auction.PausedAt.HasValue)
                 {
-                    var pausedDuration = DateTime.UtcNow - auction.PausedAt.Value;
+                    var pausedDuration = DateTime.Now - auction.PausedAt.Value;
                     auction.EndTime = auction.EndTime.Add(pausedDuration);
                 }
 
@@ -215,7 +202,7 @@ namespace BitNow_Backend.DAL.Repositories
         }
         public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10)
         {
-            var now = DateTime.Now; // Use local time (Vietnam time) - matches database storage
+            var now = DateTime.Now;
 
             // Get distinct auction IDs where user has placed bids
             var auctionIdsQuery = _context.Bids
@@ -244,7 +231,7 @@ namespace BitNow_Backend.DAL.Repositories
         }
         public async Task<(IEnumerable<Auction> auctions, int totalCount)> GetWonAuctionsByBidderAsync(int bidderId, int page = 1, int pageSize = 10)
         {
-            var now = DateTime.Now; // Use local time (Vietnam time) - matches database storage
+            var now = DateTime.Now;
 
             // Get auctions where user is the winner
             var query = _context.Auctions

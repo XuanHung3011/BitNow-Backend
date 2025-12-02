@@ -16,7 +16,7 @@ public class SellerStatsService : ISellerStatsService
 
     public async Task<SellerStatsDto> GetSellerStatsAsync(int sellerId)
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var startOfMonth = new DateTime(now.Year, now.Month, 1);
         var startOfLastMonth = startOfMonth.AddMonths(-1);
         var endOfLastMonth = startOfMonth.AddDays(-1);
@@ -104,7 +104,7 @@ public class SellerStatsService : ISellerStatsService
 
     public async Task<SellerStatsDetailDto> GetSellerStatsDetailAsync(int sellerId, string type)
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var chartData = new List<ChartDataPoint>();
         var summary = new Dictionary<string, object>();
 

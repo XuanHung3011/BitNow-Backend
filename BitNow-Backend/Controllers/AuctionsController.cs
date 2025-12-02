@@ -52,7 +52,7 @@ namespace BitNow_Backend.Controllers
                 {
                     auctionId = result.Id,
                     status = result.Status ?? "active",
-                    timestamp = DateTime.UtcNow
+                    timestamp = DateTime.Now
                 };
                 await _hubContext.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
                 await _hubContext.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");

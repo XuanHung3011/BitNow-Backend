@@ -58,7 +58,7 @@ namespace BitNow_Backend.BLL.Services
                 Slug = createCategoryDtos.Slug,
                 Description = createCategoryDtos.Description,
                 Icon = createCategoryDtos.Icon,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             var createdCategory = await _categoryRepository.CreateAsync(category);
