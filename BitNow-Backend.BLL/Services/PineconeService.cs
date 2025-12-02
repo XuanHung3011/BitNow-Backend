@@ -65,7 +65,7 @@ namespace BitNow_Backend.BLL.Services
             var client = _httpClientFactory.CreateClient("Pinecone");
             client.BaseAddress = new Uri(GetBaseUrl());
 
-            // FIX: Pinecone yêu cầu header "Api-Key" trực tiếp, không dùng Authorization
+            
             client.DefaultRequestHeaders.Add("Api-Key", GetApiKey());
 
             client.Timeout = TimeSpan.FromSeconds(30);

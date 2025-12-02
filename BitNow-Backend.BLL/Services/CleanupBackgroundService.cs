@@ -6,9 +6,6 @@ using Microsoft.Extensions.Logging;
 namespace BitNow_Backend.BLL.BackgroundServices
 {
 
-    /// Background service tự động cleanup dữ liệu:
-    /// - Xóa expired auctions từ Pinecone mỗi 24h
-    /// - Xóa search keywords cũ hơn 6 tháng mỗi 24h
     public class CleanupBackgroundService : BackgroundService
     {
         private readonly IServiceProvider _serviceProvider;

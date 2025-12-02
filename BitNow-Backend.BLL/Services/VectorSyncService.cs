@@ -45,7 +45,7 @@ namespace BitNow_Backend.BLL.Services
             try
             {
                 var lmStudioUrl = _configuration["LMStudio:BaseUrl"] ?? "http://localhost:1234";
-                var model = _configuration["LMStudio:Model"] ?? "nomic-embed-text-v1.5";
+                var model = _configuration["LMStudio:Model"] ?? "nomic-embed-text-v2-moe";
 
                 var client = _httpClientFactory.CreateClient("LMStudio");
                 client.BaseAddress = new Uri(lmStudioUrl);
@@ -190,12 +190,12 @@ namespace BitNow_Backend.BLL.Services
                     metadata,
                     cancellationToken);
 
-                _logger.LogInformation("✅ Successfully synced auction {AuctionId} to Pinecone",
+                _logger.LogInformation(" Successfully synced auction {AuctionId} to Pinecone",
                     item.AuctionId.Value);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error syncing auction {AuctionId}: {Message}",
+                _logger.LogError(ex, " Error syncing auction {AuctionId}: {Message}",
                     item.AuctionId, ex.Message);
                 throw;
             }
@@ -273,19 +273,9 @@ namespace BitNow_Backend.BLL.Services
                 parts.Add(item.Description);
             }
 
-            if (!string.IsNullOrWhiteSpace(item.CategoryName))
-            {
-                parts.Add($"Category: {item.CategoryName}");
-            }
-
             if (!string.IsNullOrWhiteSpace(item.Condition))
             {
                 parts.Add($"Condition: {item.Condition}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(item.Location))
-            {
-                parts.Add($"Location: {item.Location}");
             }
 
             return string.Join(". ", parts);

@@ -176,7 +176,7 @@ namespace BitNow_Backend.BLL.Services
         {
             var parts = new List<string>();
 
-            // Thêm thông tin từ bidding history (chỉ lấy Title, bỏ Category)
+            // Thêm thông tin từ bidding history 
             if (biddingHistory.Any())
             {
                 var biddingItems = biddingHistory
@@ -190,7 +190,7 @@ namespace BitNow_Backend.BLL.Services
                 }
             }
 
-            // Thêm thông tin từ watchlist (chỉ lấy Title, bỏ Category)
+            // Thêm thông tin từ watchlist 
             if (watchlist.Any())
             {
                 var watchlistItems = watchlist
