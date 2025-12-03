@@ -107,9 +107,11 @@ builder.Services.AddCors(options =>
 {
 	options.AddPolicy("AllowAll", policy =>
 	{
-		policy.AllowAnyOrigin()
+		// When using credentials, we must specify exact origins, not wildcard
+		policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
 			  .AllowAnyMethod()
-			  .AllowAnyHeader();
+			  .AllowAnyHeader()
+			  .AllowCredentials(); // Required when frontend uses credentials: 'include'
 	});
 });
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

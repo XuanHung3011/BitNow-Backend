@@ -183,7 +183,7 @@ public class PayOsService : IPayOsService
             // Use PayOS SDK to verify webhook (like in official demo)
             var webhookDataVerified = await _payOSClient.Webhooks.VerifyAsync(webhook);
 
-            var orderCode = (int)webhookDataVerified.OrderCode;
+            var orderCode = webhookDataVerified.OrderCode; // Keep as long
             // Status is not in WebhookData, get from original webhook data
             var status = webhookData?.Data?.Status ?? "";
 
@@ -192,7 +192,7 @@ public class PayOsService : IPayOsService
             return new PayOsWebhookResult
             {
                 Success = true,
-                OrderCode = orderCode,
+                OrderCode = (int)orderCode, // Cast to int for DTO
                 Status = status,
                 Message = "Webhook processed successfully"
             };

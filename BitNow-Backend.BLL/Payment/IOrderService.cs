@@ -33,5 +33,10 @@ public interface IOrderService
     /// Lấy orders của seller
     /// </summary>
     Task<List<OrderDto>> GetOrdersBySellerIdAsync(int sellerId);
+
+    /// <summary>
+    /// Cập nhật thông tin vận chuyển cho order
+    /// </summary>
+    Task<bool> UpdateShippingInfoAsync(int orderId, string trackingNumber, string? shippingCompany, string? shippingAddress);
 }
 

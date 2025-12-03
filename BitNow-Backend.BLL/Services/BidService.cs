@@ -155,39 +155,60 @@ namespace BitNow_Backend.BLL.Services
 			return result;
 		}
 
-		public async Task<IReadOnlyList<BidDto>> GetRecentBidsAsync(int auctionId, int limit)
+	public async Task<IReadOnlyList<BidDto>> GetRecentBidsAsync(int auctionId, int limit)
+	{
+		// Ưu tiên đọc từ Redis (cache nóng) để tránh query SQL liên tục.
+		if (_redis is not null)
 		{
-			// Ưu tiên đọc từ Redis (cache nóng) để tránh query SQL liên tục.
-			if (_redis is not null)
+			try
 			{
 				var db = _redis.GetDatabase();
 				var entries = await db.SortedSetRangeByRankAsync(BidsKey(auctionId), -limit, -1, StackExchange.Redis.Order.Ascending);
 				if (entries?.Length > 0)
 				{
-					return entries
-						.Select(e => JsonSerializer.Deserialize<BidDto>(e!))
-						.Where(e => e != null)
-						!.Select(e =>
+					var result = new List<BidDto>();
+					foreach (var entry in entries)
+					{
+						if (entry.IsNullOrEmpty) continue;
+						try
 						{
-							if (string.IsNullOrWhiteSpace(e!.BidderName))
+							var bid = JsonSerializer.Deserialize<BidDto>(entry!);
+							if (bid != null)
 							{
-								e!.BidderName = $"User #{e.BidderId}";
+								if (string.IsNullOrWhiteSpace(bid.BidderName))
+								{
+									bid.BidderName = $"User #{bid.BidderId}";
+								}
+								result.Add(bid);
 							}
-							return e!;
-						})
-						.ToList()!;
+						}
+						catch
+						{
+							// Skip invalid entries
+							continue;
+						}
+					}
+					if (result.Count > 0)
+					{
+						return result;
+					}
 				}
 			}
-			// Cache trống hoặc Redis không sẵn sàng => fallback đọc trực tiếp từ SQL.
-			var list = await _bidRepository.GetRecentByAuctionAsync(auctionId, limit);
-			return list.Select(b => new BidDto
+			catch
 			{
-				BidderId = b.BidderId,
-				BidderName = b.Bidder?.FullName ?? $"User #{b.BidderId}",
-				Amount = b.Amount,
-				BidTime = b.BidTime ?? DateTime.Now
-			}).ToList();
+				// Redis error, fallback to SQL
+			}
 		}
+		// Cache trống hoặc Redis không sẵn sàng => fallback đọc trực tiếp từ SQL.
+		var list = await _bidRepository.GetRecentByAuctionAsync(auctionId, limit);
+		return list.Select(b => new BidDto
+		{
+			BidderId = b.BidderId,
+			BidderName = b.Bidder?.FullName ?? $"User #{b.BidderId}",
+			Amount = b.Amount,
+			BidTime = b.BidTime ?? DateTime.Now
+		}).ToList();
+	}
 
 		public async Task<decimal?> GetHighestBidAsync(int auctionId)
 		{

@@ -59,8 +59,8 @@ public class PayOsWebhookDto
 
 public class PayOsWebhookData
 {
-    public int OrderCode { get; set; }
-    public int Amount { get; set; }
+    public long OrderCode { get; set; } // Changed to long to match SDK
+    public long Amount { get; set; } // Changed to long to match SDK
     public string? Description { get; set; }
     public string? AccountNumber { get; set; }
     public string? Reference { get; set; }

@@ -161,6 +161,44 @@ public class OrderService : IOrderService
         return orders.Select(MapToDto).ToList();
     }
 
+    public async Task<bool> UpdateShippingInfoAsync(int orderId, string trackingNumber, string? shippingCompany, string? shippingAddress)
+    {
+        try
+        {
+            var order = await _dbContext.Orders.FindAsync(orderId);
+            if (order == null)
+            {
+                _logger.LogWarning("Order {OrderId} not found for shipping update", orderId);
+                return false;
+            }
+
+            // Only allow shipping update if order is in awaiting_shipment status
+            if (order.OrderStatus != "awaiting_shipment")
+            {
+                _logger.LogWarning("Cannot update shipping for order {OrderId} with status {Status}", orderId, order.OrderStatus);
+                return false;
+            }
+
+            order.TrackingNumber = trackingNumber;
+            order.ShippingCompany = shippingCompany;
+            order.ShippingAddress = shippingAddress;
+            order.ShippedAt = DateTime.Now;
+            order.OrderStatus = "shipped";
+            order.UpdatedAt = DateTime.Now;
+
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("Shipping info updated for order {OrderId}: TrackingNumber={TrackingNumber}, Company={Company}", 
+                orderId, trackingNumber, shippingCompany);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating shipping info for order {OrderId}", orderId);
+            return false;
+        }
+    }
+
     private static OrderDto MapToDto(Order order)
     {
         return new OrderDto
