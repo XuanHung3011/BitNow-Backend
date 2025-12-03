@@ -60,6 +60,8 @@ builder.Services.AddScoped<INotificationHub, NotificationHubService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
+builder.Services.AddHostedService<AuctionFinalizationBackgroundService>();
+
 
 // AI Recommendations
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
