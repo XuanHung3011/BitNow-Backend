@@ -12,9 +12,10 @@ namespace BitNow_Backend.BLL.Services
         private readonly IBidService _bidService;
         private readonly IWatchlistService _watchlistService;
         private readonly ISearchKeywordService _searchKeywordService;
+        private readonly IUserAuctionViewService _userAuctionViewService;
         private readonly IVectorSyncService _vectorSyncService;
         private readonly IPineconeService _pineconeService;
-        private readonly IAuctionService _auction_service;
+        private readonly IAuctionService _auctionService;
         private readonly ILogger<RecommendationService> _logger;
 
         // Ngưỡng điểm tương đồng tối thiểu 
@@ -25,18 +26,20 @@ namespace BitNow_Backend.BLL.Services
             IBidService bidService,
             IWatchlistService watchlistService,
             ISearchKeywordService searchKeywordService,
+            IUserAuctionViewService userAuctionViewService,
             IVectorSyncService vectorSyncService,
             IPineconeService pineconeService,
             IAuctionService auctionService,
             ILogger<RecommendationService> logger)
         {
             _itemService = itemService;
-            _bid_service = bidService;
-            _watchlist_service = watchlistService;
+            _bidService = bidService;
+            _watchlistService = watchlistService;
             _searchKeywordService = searchKeywordService;
+            _userAuctionViewService = userAuctionViewService;
             _vectorSyncService = vectorSyncService;
             _pineconeService = pineconeService;
-            _auction_service = auctionService;
+            _auctionService = auctionService;
             _logger = logger;
         }
 
@@ -53,9 +56,14 @@ namespace BitNow_Backend.BLL.Services
 
             // Lấy lịch sử user
             var biddingHistory = await _bidService.GetBiddingHistoryAsync(userId, 1, 20);
-            var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(50).ToList();
+            var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(20).ToList();
             var searchKeywords = await _searchKeywordService.GetRecentKeywordsAsync(userId, 20);
-            var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any() || searchKeywords.Any();
+            var viewedAuctionIds = await _userAuctionViewService.GetRecentViewedAuctionIdsAsync(userId, 20, cancellationToken);
+            var viewedItems = viewedAuctionIds.Any()
+                ? await _auctionService.GetItemsByAuctionIdsAsync(viewedAuctionIds.ToHashSet())
+                : Enumerable.Empty<ItemResponseDto>();
+
+            var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any() || searchKeywords.Any() || viewedAuctionIds.Any();
 
             // Fallback cho new users
             if (!hasUserData)
@@ -74,7 +82,7 @@ namespace BitNow_Backend.BLL.Services
             }
 
             // Tạo textbuyer và embedding
-            var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems, searchKeywords);
+            var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems, searchKeywords, viewedItems);
             _logger.LogInformation("User {UserId} textbuyer:\n{TextBuyer}", userId, textbuyer);
 
             //  Gọi GenerateEmbeddingAsync từ VectorSyncService
@@ -96,11 +104,11 @@ namespace BitNow_Backend.BLL.Services
                         {
                             new Dictionary<string, object>
                             {
-                                ["endTimeUnix"] = new Dictionary<string, object> { ["$eq"] = 0 }
+                                ["endTime"] = new Dictionary<string, object> { ["$eq"] = 0 }
                             },
                             new Dictionary<string, object>
                             {
-                                ["endTimeUnix"] = new Dictionary<string, object> { ["$gt"] = currentTimeUnix }
+                                ["endTime"] = new Dictionary<string, object> { ["$gt"] = currentTimeUnix }
                             }
                         }
                     }
@@ -168,11 +176,11 @@ namespace BitNow_Backend.BLL.Services
         }
 
 
-        /// Xây dựng textbuyer từ watchlist, bidding history và search keywords để tạo embedding vector.
         private static string BuildTextBuyer(
             IEnumerable<BiddingHistoryDto> biddingHistory,
             IEnumerable<WatchlistItemDto> watchlist,
-            IEnumerable<string> searchKeywords)
+            IEnumerable<string> searchKeywords,
+            IEnumerable<ItemResponseDto> viewedItems)
         {
             var parts = new List<string>();
 
@@ -181,8 +189,16 @@ namespace BitNow_Backend.BLL.Services
             {
                 var biddingItems = biddingHistory
                     .Take(20)
-                    .Where(h => !string.IsNullOrWhiteSpace(h.ItemTitle))
-                    .Select(h => h.ItemTitle);
+                    .Select(h =>
+                    {
+                        var itemParts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(h.ItemTitle))
+                            itemParts.Add(h.ItemTitle);
+                        if (!string.IsNullOrWhiteSpace(h.CategoryName))
+                            itemParts.Add($"({h.CategoryName})");
+                        return itemParts.Any() ? string.Join(" ", itemParts) : null;
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
 
                 if (biddingItems.Any())
                 {
@@ -194,9 +210,17 @@ namespace BitNow_Backend.BLL.Services
             if (watchlist.Any())
             {
                 var watchlistItems = watchlist
-                    .Take(50)
-                    .Where(w => !string.IsNullOrWhiteSpace(w.ItemTitle))
-                    .Select(w => w.ItemTitle);
+                    .Take(20)
+                    .Select(w =>
+                    {
+                        var itemParts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(w.ItemTitle))
+                            itemParts.Add(w.ItemTitle);
+                        if (!string.IsNullOrWhiteSpace(w.CategoryName))
+                            itemParts.Add($"({w.CategoryName})");
+                        return itemParts.Any() ? string.Join(" ", itemParts) : null;
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
 
                 if (watchlistItems.Any())
                 {
@@ -208,6 +232,28 @@ namespace BitNow_Backend.BLL.Services
             if (searchKeywords != null && searchKeywords.Any())
             {
                 parts.Add($"Recent search keywords: {string.Join(", ", searchKeywords)}");
+            }
+
+            // Thêm thông tin từ các auction mà user hay xem
+            if (viewedItems != null && viewedItems.Any())
+            {
+                var viewed = viewedItems
+                    .Take(20)
+                    .Select(v =>
+                    {
+                        var itemParts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(v.Title))
+                            itemParts.Add(v.Title);
+                        if (!string.IsNullOrWhiteSpace(v.CategoryName))
+                            itemParts.Add($"({v.CategoryName})");
+                        return itemParts.Any() ? string.Join(" ", itemParts) : null;
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
+
+                if (viewed.Any())
+                {
+                    parts.Add($"Frequently viewed auctions: {string.Join(", ", viewed)}");
+                }
             }
 
             return string.Join("\n", parts);

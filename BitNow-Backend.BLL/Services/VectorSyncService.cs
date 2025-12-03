@@ -175,7 +175,7 @@ namespace BitNow_Backend.BLL.Services
                     { "title", item.Title ?? "" },
                     { "description", item.Description ?? "" },
                     { "status", item.AuctionStatus ?? "active" },
-                    { "endTimeUnix", item.AuctionEndTime.HasValue
+                    { "endTime", item.AuctionEndTime.HasValue
                         ? new DateTimeOffset(item.AuctionEndTime.Value).ToUnixTimeSeconds()
                         : 0 }
                 };
@@ -212,7 +212,8 @@ namespace BitNow_Backend.BLL.Services
                     .Where(i =>
                         i.AuctionId.HasValue &&
                         (i.AuctionEndTime.HasValue && i.AuctionEndTime <= DateTime.UtcNow ||
-                         string.Equals(i.AuctionStatus, "completed", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(i.AuctionStatus, "completed", StringComparison.OrdinalIgnoreCase) || 
+                         string.Equals(i.AuctionStatus, "paused", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(i.AuctionStatus, "cancelled", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
@@ -271,6 +272,10 @@ namespace BitNow_Backend.BLL.Services
             if (!string.IsNullOrWhiteSpace(item.Description))
             {
                 parts.Add(item.Description);
+            }
+            if (!string.IsNullOrWhiteSpace(item.CategoryName))
+            {
+                parts.Add($"Category: {item.CategoryName}");
             }
 
             if (!string.IsNullOrWhiteSpace(item.Condition))

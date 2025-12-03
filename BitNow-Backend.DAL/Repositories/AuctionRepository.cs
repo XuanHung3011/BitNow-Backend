@@ -265,7 +265,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .ToListAsync();
         }
 
-<<<<<<< HEAD
+
         public async Task<IEnumerable<Auction>> GetAuctionsByIdsAsync(IEnumerable<int> auctionIds)
         {
             if (auctionIds == null || !auctionIds.Any())
@@ -284,11 +284,12 @@ namespace BitNow_Backend.DAL.Repositories
                 .Where(a =>
                     auctionIds.Contains(a.Id) &&
                     a.Status != null && allowedStatuses.Contains(a.Status.ToLower()) &&
-                    a.Item.Status == "approved" &&
+                    (a.Item.Status == "approved" || a.Item.Status == "archived") &&
                     a.EndTime > now
                 )
                 .ToListAsync();
-=======
+        }
+
         public async Task<int> UpdateScheduledToActiveAsync()
         {
             var now = DateTime.Now; // Use local time (Vietnam time)
@@ -368,7 +369,7 @@ namespace BitNow_Backend.DAL.Repositories
             }
 
             return updated;
->>>>>>> d1e4d9e941fc5effafd5e75fb5fed6ff8488fe83
+
         }
     }
 }

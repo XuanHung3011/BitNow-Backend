@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using BitNow_Backend.RealTime;
 using BitNow_Backend.BLL.Services;
+using BitNow_Backend.BLL.IServices;
 
 namespace BitNow_Backend.Controllers
 {
@@ -17,9 +18,16 @@ namespace BitNow_Backend.Controllers
         private readonly ILogger<AuctionsController> _logger;
         private readonly IVectorSyncService _vectorSyncService;  
         private readonly IItemService _itemService;
+        private readonly IUserAuctionViewService _userAuctionViewService;
 
-        public AuctionsController(IAuctionService auctionService, IBidService bidService, IHubContext<AuctionHub> hubContext, ILogger<AuctionsController> logger
-            , IVectorSyncService vectorSyncService,  IItemService itemService)
+        public AuctionsController(
+            IAuctionService auctionService,
+            IBidService bidService,
+            IHubContext<AuctionHub> hubContext,
+            ILogger<AuctionsController> logger,
+            IVectorSyncService vectorSyncService,
+            IItemService itemService,
+            IUserAuctionViewService userAuctionViewService)
         {
             _auctionService = auctionService;
             _bidService = bidService;
@@ -27,6 +35,7 @@ namespace BitNow_Backend.Controllers
             _logger = logger;
             _vectorSyncService = vectorSyncService;  
             _itemService = itemService;
+            _userAuctionViewService = userAuctionViewService;
         }
 
         /// <summary>
@@ -114,11 +123,19 @@ namespace BitNow_Backend.Controllers
         }
 
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<AuctionDetailDto>> Get(int id)
+        public async Task<ActionResult<AuctionDetailDto>> Get(
+            int id,
+            [FromQuery] int? userId = null)
 		{
 			var dto = await _auctionService.GetDetailAsync(id);
 			if (dto == null) return NotFound();
-			return Ok(dto);
+
+            if (userId.HasValue && userId.Value > 0)
+            {
+                await _userAuctionViewService.LogViewAsync(userId.Value, id);
+            }
+
+            return Ok(dto);
 		}
 
 		[HttpPost("{id}/bid")]

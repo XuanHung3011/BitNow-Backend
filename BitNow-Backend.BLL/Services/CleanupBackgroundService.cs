@@ -5,16 +5,15 @@ using Microsoft.Extensions.Logging;
 
 namespace BitNow_Backend.BLL.BackgroundServices
 {
-
     public class CleanupBackgroundService : BackgroundService
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<CleanupBackgroundService> _logger;
 
-        // Hard-coded settings
-        private static readonly TimeSpan CLEANUP_INTERVAL = TimeSpan.FromHours(24);
         private static readonly TimeSpan KEYWORD_RETENTION = TimeSpan.FromDays(180); // 6 tháng
         private static readonly TimeSpan STARTUP_DELAY = TimeSpan.FromMinutes(1);
+        private static readonly int CLEANUP_HOUR = 1; // 1h sáng
+        private static readonly TimeZoneInfo VN_TIMEZONE = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
 
         public CleanupBackgroundService(
             IServiceProvider serviceProvider,
@@ -27,7 +26,7 @@ namespace BitNow_Backend.BLL.BackgroundServices
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation(" CleanupBackgroundService started");
-            _logger.LogInformation(" Schedule: Every 24h | Keywords retention: 180 days");
+            _logger.LogInformation(" Schedule: Daily at 1:00 AM (Vietnam Time) | Keywords retention: 180 days");
 
             try
             {
@@ -38,11 +37,15 @@ namespace BitNow_Backend.BLL.BackgroundServices
                 // Chạy cleanup ngay lần đầu
                 await RunCleanupTasksAsync(stoppingToken);
 
-                // Sau đó chạy mỗi 24h
-                using var timer = new PeriodicTimer(CLEANUP_INTERVAL);
-
-                while (await timer.WaitForNextTickAsync(stoppingToken))
+                // Sau đó chạy vào 1h sáng mỗi ngày
+                while (!stoppingToken.IsCancellationRequested)
                 {
+                    var delay = CalculateDelayUntilNextRun();
+                    _logger.LogInformation(" Next cleanup scheduled in {Hours:F1} hours at {NextRun}",
+                        delay.TotalHours,
+                        TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow.Add(delay), VN_TIMEZONE).ToString("yyyy-MM-dd HH:mm:ss"));
+
+                    await Task.Delay(delay, stoppingToken);
                     await RunCleanupTasksAsync(stoppingToken);
                 }
             }
@@ -52,14 +55,36 @@ namespace BitNow_Backend.BLL.BackgroundServices
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, " Fatal error in CleanupBackgroundService");
+                _logger.LogError(ex, "❌ Fatal error in CleanupBackgroundService");
                 throw;
             }
         }
 
+        private TimeSpan CalculateDelayUntilNextRun()
+        {
+            var nowUtc = DateTime.UtcNow;
+            var nowVN = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, VN_TIMEZONE);
+
+            // Tính thời điểm 1h sáng hôm nay (VN time)
+            var nextRunVN = new DateTime(nowVN.Year, nowVN.Month, nowVN.Day, CLEANUP_HOUR, 0, 0);
+
+            // Nếu đã qua 1h sáng hôm nay, chuyển sang 1h sáng ngày mai
+            if (nowVN >= nextRunVN)
+            {
+                nextRunVN = nextRunVN.AddDays(1);
+            }
+
+            // Chuyển về UTC để tính delay
+            var nextRunUtc = TimeZoneInfo.ConvertTimeToUtc(nextRunVN, VN_TIMEZONE);
+            var delay = nextRunUtc - nowUtc;
+
+            return delay;
+        }
+
         private async Task RunCleanupTasksAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("===  Starting cleanup tasks ===");
+            var vnTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, VN_TIMEZONE);
+            _logger.LogInformation("===  Starting cleanup tasks at {VNTime} (VN) ===", vnTime.ToString("yyyy-MM-dd HH:mm:ss"));
             var startTime = DateTime.UtcNow;
 
             // Chạy song song 2 tasks
@@ -71,9 +96,6 @@ namespace BitNow_Backend.BLL.BackgroundServices
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("===  Cleanup completed in {Duration:F2}s ===", duration.TotalSeconds);
         }
-
-
-        /// Xóa expired auctions từ Pinecone
 
         private async Task CleanupExpiredAuctionsAsync(CancellationToken stoppingToken)
         {
@@ -93,11 +115,8 @@ namespace BitNow_Backend.BLL.BackgroundServices
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Auction]  Failed: {Message}", ex.Message);
-                // Không throw để service tiếp tục chạy
             }
         }
-
-        /// Xóa search keywords cũ hơn 6 tháng
 
         private async Task CleanupOldSearchKeywordsAsync(CancellationToken stoppingToken)
         {
@@ -120,10 +139,8 @@ namespace BitNow_Backend.BLL.BackgroundServices
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Keyword] ❌ Failed: {Message}", ex.Message);
-                // Không throw để service tiếp tục chạy
+                _logger.LogError(ex, "[Keyword]  Failed: {Message}", ex.Message);
             }
         }
-
     }
 }
