@@ -206,10 +206,24 @@ namespace BitNow_Backend.BLL.Services
 
         private static ItemResponseDto MapToResponseDto(Item item)
         {
-            // Lấy auction mới nhất của item (ưu tiên active, sau đó lấy bất kỳ)
-            // Để hiển thị tất cả auctions, không chỉ active
-            var activeAuction = item.Auctions?
-                .OrderByDescending(a => a.Status == "active" ? 1 : 0) // Ưu tiên active trước
+            // Chỉ lấy các auction còn hiệu lực cho người mua:
+            // - Không lấy các auction đã hủy (cancelled) hoặc đã hoàn tất (completed)
+            // - Không lấy các auction đã hết hạn (EndTime <= now)
+            // => Giữ lại: active/scheduled/paused còn hiệu lực
+            var now = DateTime.Now;
+
+            var visibleAuctions = item.Auctions?
+                .Where(a =>
+                    a.Status != null &&
+                    !a.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase) &&
+                    !a.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) &&
+                    a.EndTime > now);
+
+            // Ưu tiên auction đang active, sau đó paused, sau đó các trạng thái khác (nếu có)
+            var activeAuction = visibleAuctions?
+                .OrderByDescending(a =>
+                    string.Equals(a.Status, "active", StringComparison.OrdinalIgnoreCase) ? 2 :
+                    string.Equals(a.Status, "paused", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
                 .ThenByDescending(a => a.CreatedAt)
                 .FirstOrDefault();
 
