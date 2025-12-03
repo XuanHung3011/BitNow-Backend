@@ -20,8 +20,9 @@ namespace BitNow_Backend.DAL.Repositories
         {
             return await _context.Auctions
                 .Include(a => a.Item)
-                .ThenInclude(i => i.Category)
+                    .ThenInclude(i => i.Category)
                 .Include(a => a.Seller)
+                .Include(a => a.Winner)
                 .FirstOrDefaultAsync(a => a.Id == id);
         }
 
