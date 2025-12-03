@@ -457,6 +457,30 @@ namespace BitNow_Backend.DAL.Repositories
             return item;
         }
 
+        public async Task<Item?> UpdateAsync(Item item)
+        {
+            var existingItem = await _context.Items.FindAsync(item.Id);
+            if (existingItem == null)
+            {
+                return null;
+            }
+
+            // Update properties
+            existingItem.Title = item.Title;
+            existingItem.Description = item.Description;
+            existingItem.ItemSpecifics = item.ItemSpecifics;
+            existingItem.CategoryId = item.CategoryId;
+            existingItem.BasePrice = item.BasePrice;
+            existingItem.Condition = item.Condition;
+            existingItem.Location = item.Location;
+            existingItem.Images = item.Images;
+            // Keep Status as "draft" if it was draft, don't change it
+            // Keep CreatedAt unchanged
+
+            await _context.SaveChangesAsync();
+            return existingItem;
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             var item = await _context.Items.FindAsync(id);
