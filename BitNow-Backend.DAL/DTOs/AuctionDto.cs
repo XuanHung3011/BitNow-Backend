@@ -9,6 +9,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public int ItemId { get; set; }
 		public string ItemTitle { get; set; } = null!;
 		public string? ItemDescription { get; set; }
+		public string? ItemSpecifics { get; set; }
 		public string? ItemImages { get; set; }
 		public int CategoryId { get; set; }
         public string? CategoryName { get; set; }
