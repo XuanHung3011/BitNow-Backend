@@ -68,13 +68,13 @@ builder.Services.AddScoped<INotificationHub, NotificationHubService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
-<<<<<<< HEAD
+
 // Register Background Service
 builder.Services.AddHostedService<CleanupBackgroundService>();
-=======
+
 builder.Services.AddHostedService<AuctionFinalizationBackgroundService>();
 
->>>>>>> d14112b7efa4bfca8e51fd040144b50599b1f798
+
 
 // AI Recommendations - Vector-based
 Console.OutputEncoding = Encoding.UTF8;
