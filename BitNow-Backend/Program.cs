@@ -1,6 +1,7 @@
 using BitNow_Backend.DAL;
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.BLL.Services;
+using BitNow_Backend.BLL.Payment;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -68,6 +69,10 @@ builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 
 // HttpClient (dùng cho OpenAI)
 builder.Services.AddHttpClient("OpenAI");
+
+// Payment Services
+builder.Services.AddScoped<IPayOsService, PayOsService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 
 // Background Service for Auction Status Updates
 builder.Services.AddHostedService<AuctionStatusUpdateService>();

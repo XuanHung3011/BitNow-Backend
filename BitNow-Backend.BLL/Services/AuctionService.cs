@@ -596,6 +596,31 @@ namespace BitNow_Backend.BLL.Services
                     auction.CurrentBid = finalBid.Value;
                 }
 
+                // Create Order for winner if there is a winner
+                if (winnerId.HasValue && finalBid.HasValue)
+                {
+                    // Check if order already exists
+                    var existingOrder = await _dbContext.Orders
+                        .FirstOrDefaultAsync(o => o.AuctionId == auction.Id, cancellationToken);
+
+                    if (existingOrder == null)
+                    {
+                        var order = new Order
+                        {
+                            AuctionId = auction.Id,
+                            BuyerId = winnerId.Value,
+                            SellerId = auction.SellerId,
+                            FinalPrice = finalBid.Value,
+                            OrderStatus = "awaiting_payment", // Winner needs to pay
+                            CreatedAt = now
+                        };
+
+                        _dbContext.Orders.Add(order);
+                        // Save immediately to ensure order is available
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
+                }
+
                 var completion = new AuctionCompletionResultDto
                 {
                     AuctionId = auction.Id,
