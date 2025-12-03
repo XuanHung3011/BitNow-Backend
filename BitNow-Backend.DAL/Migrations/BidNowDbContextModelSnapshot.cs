@@ -554,6 +554,10 @@ namespace BitNow_Backend.DAL.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("images");
 
+                    b.Property<string>("ItemSpecifics")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("item_specifics");
+
                     b.Property<string>("Location")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
