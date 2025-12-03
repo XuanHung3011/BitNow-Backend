@@ -11,6 +11,7 @@ namespace BitNow_Backend.DAL.DTOs
         public int Id { get; set; }
         public string Title { get; set; } = null!;
         public string? Description { get; set; }
+        public string? ItemSpecifics { get; set; }
         public decimal? BasePrice { get; set; }
         public string? Condition { get; set; }
         public string? Images { get; set; }
@@ -86,6 +87,7 @@ namespace BitNow_Backend.DAL.DTOs
         public int CategoryId { get; set; }
         public string Title { get; set; } = null!;
         public string? Description { get; set; }
+        public string? ItemSpecifics { get; set; }
         public string? Condition { get; set; }
         public string? Location { get; set; }
         public decimal BasePrice { get; set; }

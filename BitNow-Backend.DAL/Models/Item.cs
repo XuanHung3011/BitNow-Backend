@@ -15,6 +15,8 @@ public partial class Item
 
     public string? Description { get; set; }
 
+    public string? ItemSpecifics { get; set; }
+
     public string? Images { get; set; }
 
     public string? Condition { get; set; }

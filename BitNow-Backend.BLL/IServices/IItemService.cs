@@ -39,6 +39,9 @@ namespace BitNow_Backend.BLL.IServices
         // Create draft item
         Task<ItemResponseDto?> CreateDraftItemAsync(CreateItemDto dto, string? imagesPath = null);
 
+        // Update draft item
+        Task<ItemResponseDto?> UpdateDraftItemAsync(int id, CreateItemDto dto, string? imagesPath = null);
+
         // Delete item
         Task<bool> DeleteItemAsync(int id);
     }

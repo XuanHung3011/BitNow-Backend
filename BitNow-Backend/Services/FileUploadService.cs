@@ -14,7 +14,7 @@ namespace BitNow_Backend.Services
     public class FileUploadService : IFileUploadService
     {
         private readonly string _rootPath;
-        private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png" };
         private const long _maxFileSize = 10 * 1024 * 1024; // 10MB
 
         public FileUploadService(IWebHostEnvironment environment)

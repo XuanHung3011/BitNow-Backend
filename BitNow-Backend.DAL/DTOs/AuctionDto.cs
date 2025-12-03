@@ -9,6 +9,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public int ItemId { get; set; }
 		public string ItemTitle { get; set; } = null!;
 		public string? ItemDescription { get; set; }
+		public string? ItemSpecifics { get; set; }
 		public string? ItemImages { get; set; }
 		public int CategoryId { get; set; }
         public string? CategoryName { get; set; }
@@ -31,6 +32,7 @@ namespace BitNow_Backend.DAL.DTOs
 	{
 		public int Id { get; set; }
 		public string ItemTitle { get; set; } = null!;
+		public string? ItemImages { get; set; } // Images from the item
 		public string? SellerName { get; set; }
 		public string? CategoryName { get; set; }
 		public decimal StartingBid { get; set; }

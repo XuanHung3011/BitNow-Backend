@@ -58,7 +58,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .Where(i => i.Status == "approved")
+                .Where(i => i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any()))
                 .OrderByDescending(i => i.CreatedAt)
                 .ToListAsync();
         }
@@ -72,7 +72,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .Where(i => i.Status == "approved")
+                .Where(i => i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any()))
                 .OrderByDescending(i => i.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -121,7 +121,7 @@ namespace BitNow_Backend.DAL.Repositories
         public async Task<int> CountApprovedAsync()
         {
             return await _context.Items
-                .Where(i => i.Status == "approved")
+                .Where(i => i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any()))
                 .CountAsync();
         }
 
@@ -133,7 +133,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .Where(i => i.Status == "approved" &&
+                .Where(i => (i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any())) &&
                            (EF.Functions.Like(i.Title.ToLower(), $"%{term}%") ||
                             (i.Category != null && EF.Functions.Like(i.Category.Name.ToLower(), $"%{term}%"))))
                 .OrderByDescending(i => i.CreatedAt)
@@ -151,7 +151,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .Where(i => i.Status == "approved" &&
+                .Where(i => (i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any())) &&
                            (EF.Functions.Like(i.Title.ToLower(), $"%{term}%") ||
                             (i.Category != null && EF.Functions.Like(i.Category.Name.ToLower(), $"%{term}%"))))
                 .OrderByDescending(i => i.CreatedAt)
@@ -165,7 +165,7 @@ namespace BitNow_Backend.DAL.Repositories
             var term = (searchTerm ?? string.Empty).ToLower().Trim();
 
             return await _context.Items
-                .Where(i => i.Status == "approved" &&
+                .Where(i => (i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any())) &&
                            (EF.Functions.Like(i.Title.ToLower(), $"%{term}%") ||
                             (i.Category != null && EF.Functions.Like(i.Category.Name.ToLower(), $"%{term}%"))))
                 .CountAsync();
@@ -181,7 +181,7 @@ namespace BitNow_Backend.DAL.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .Where(i => i.Status == "approved")
+                .Where(i => i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any()))
                 .AsQueryable();
 
             // Search term (title or category name)
@@ -245,7 +245,7 @@ namespace BitNow_Backend.DAL.Repositories
         public async Task<int> CountFilteredApprovedAsync(ItemFilterDto filter)
         {
             var query = _context.Items
-                .Where(i => i.Status == "approved")
+                .Where(i => i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any()))
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(filter?.SearchTerm))
@@ -311,12 +311,12 @@ namespace BitNow_Backend.DAL.Repositories
         {
             if (limit <= 0) limit = 8;
 
-            // Items approved and with at least one active auction, ordered by activity
+            // Items approved or archived (with auction) and with at least one active auction, ordered by activity
             return await _context.Items
                 .Include(i => i.Category)
                 .Include(i => i.Seller)
                 .Include(i => i.Auctions)
-                .Where(i => i.Status == "approved" && i.Auctions.Any(a => a.Status == "active"))
+                .Where(i => (i.Status == "approved" || (i.Status == "archived" && i.Auctions != null && i.Auctions.Any())) && i.Auctions.Any(a => a.Status == "active"))
                 .OrderByDescending(i => i.Auctions
                     .Where(a => a.Status == "active")
                     .Select(a => (int?)a.BidCount)
@@ -455,6 +455,30 @@ namespace BitNow_Backend.DAL.Repositories
             _context.Items.Add(item);
             await _context.SaveChangesAsync();
             return item;
+        }
+
+        public async Task<Item?> UpdateAsync(Item item)
+        {
+            var existingItem = await _context.Items.FindAsync(item.Id);
+            if (existingItem == null)
+            {
+                return null;
+            }
+
+            // Update properties
+            existingItem.Title = item.Title;
+            existingItem.Description = item.Description;
+            existingItem.ItemSpecifics = item.ItemSpecifics;
+            existingItem.CategoryId = item.CategoryId;
+            existingItem.BasePrice = item.BasePrice;
+            existingItem.Condition = item.Condition;
+            existingItem.Location = item.Location;
+            existingItem.Images = item.Images;
+            // Keep Status as "draft" if it was draft, don't change it
+            // Keep CreatedAt unchanged
+
+            await _context.SaveChangesAsync();
+            return existingItem;
         }
 
         public async Task<bool> DeleteAsync(int id)
