@@ -42,6 +42,7 @@ namespace BitNow_Backend.BLL.Services
 				ItemId = a.ItemId,
 				ItemTitle = a.Item.Title,
 				ItemDescription = a.Item.Description,
+				ItemSpecifics = a.Item.ItemSpecifics,
 				ItemImages = a.Item.Images,
 				CategoryId = a.Item.CategoryId,
                 CategoryName = a.Item.Category?.Name,
