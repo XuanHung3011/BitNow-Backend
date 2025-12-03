@@ -154,6 +154,7 @@ namespace BitNow_Backend.BLL.Services
                 CategoryId = dto.CategoryId,
                 Title = dto.Title,
                 Description = dto.Description,
+                ItemSpecifics = dto.ItemSpecifics,
                 Images = imagesPath, // Store comma-separated paths
                 Condition = dto.Condition,
                 Location = dto.Location,
@@ -190,6 +191,7 @@ namespace BitNow_Backend.BLL.Services
                 CategoryId = dto.CategoryId,
                 Title = dto.Title,
                 Description = dto.Description,
+                ItemSpecifics = dto.ItemSpecifics,
                 Images = imagesPath, // Store comma-separated paths
                 Condition = dto.Condition,
                 Location = dto.Location,
@@ -202,6 +204,44 @@ namespace BitNow_Backend.BLL.Services
 
             // Reload with includes to get full data
             return await GetByIdAsync(createdItem.Id);
+        }
+
+        public async Task<ItemResponseDto?> UpdateDraftItemAsync(int id, CreateItemDto dto, string? imagesPath = null)
+        {
+            // Get existing item
+            var existingItem = await _itemRepository.GetByIdAsync(id);
+            if (existingItem == null)
+            {
+                return null;
+            }
+
+            // Only allow updating draft items
+            if (existingItem.Status?.ToLower() != "draft")
+            {
+                throw new InvalidOperationException("Chỉ có thể cập nhật các sản phẩm ở trạng thái bản nháp");
+            }
+
+            // Update item properties
+            existingItem.Title = dto.Title;
+            existingItem.Description = dto.Description;
+            existingItem.ItemSpecifics = dto.ItemSpecifics;
+            existingItem.CategoryId = dto.CategoryId;
+            existingItem.BasePrice = dto.BasePrice;
+            existingItem.Condition = dto.Condition;
+            existingItem.Location = dto.Location;
+            
+            // Update images if provided
+            if (!string.IsNullOrWhiteSpace(imagesPath))
+            {
+                existingItem.Images = imagesPath;
+            }
+
+            // Keep Status as "draft" and CreatedAt unchanged
+
+            var updatedItem = await _itemRepository.UpdateAsync(existingItem);
+
+            // Reload with includes to get full data
+            return await GetByIdAsync(updatedItem.Id);
         }
 
         private static ItemResponseDto MapToResponseDto(Item item)
@@ -232,6 +272,7 @@ namespace BitNow_Backend.BLL.Services
                 Id = item.Id,
                 Title = item.Title,
                 Description = item.Description,
+                ItemSpecifics = item.ItemSpecifics,
                 BasePrice = item.BasePrice,
                 Condition = item.Condition,
                 Images = item.Images,

@@ -60,12 +60,17 @@ builder.Services.AddScoped<INotificationHub, NotificationHubService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
+builder.Services.AddHostedService<AuctionFinalizationBackgroundService>();
+
 
 // AI Recommendations
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 
 // HttpClient (dùng cho OpenAI)
 builder.Services.AddHttpClient("OpenAI");
+
+// Background Service for Auction Status Updates
+builder.Services.AddHostedService<AuctionStatusUpdateService>();
 
 
 // Add services to the container.

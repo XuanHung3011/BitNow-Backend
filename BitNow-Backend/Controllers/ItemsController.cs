@@ -78,6 +78,7 @@ namespace BitNow_Backend.Controllers
                     CategoryId = categoryId,
                     Title = title,
                     Description = form["Description"].ToString(),
+                    ItemSpecifics = form["ItemSpecifics"].ToString(),
                     Condition = form["Condition"].ToString(),
                     Location = form["Location"].ToString(),
                     BasePrice = basePrice
@@ -255,6 +256,7 @@ namespace BitNow_Backend.Controllers
                     CategoryId = categoryId,
                     Title = title,
                     Description = form["Description"].ToString(),
+                    ItemSpecifics = form["ItemSpecifics"].ToString(),
                     Condition = form["Condition"].ToString(),
                     Location = form["Location"].ToString(),
                     BasePrice = basePrice
@@ -301,6 +303,103 @@ namespace BitNow_Backend.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating draft item");
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Update a draft item
+        /// </summary>
+        [HttpPut("draft/{id}")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<ItemResponseDto>> UpdateDraftItem(int id)
+        {
+            try
+            {
+                // Manually read from Form to handle model binding issues
+                var form = await Request.ReadFormAsync();
+
+                // Parse CreateItemDto from form
+                if (!int.TryParse(form["SellerId"].ToString(), out int sellerId) || sellerId <= 0)
+                {
+                    return BadRequest(new { message = "SellerId is required and must be greater than 0" });
+                }
+
+                if (!int.TryParse(form["CategoryId"].ToString(), out int categoryId) || categoryId <= 0)
+                {
+                    return BadRequest(new { message = "CategoryId is required and must be greater than 0" });
+                }
+
+                var title = form["Title"].ToString();
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return BadRequest(new { message = "Title is required" });
+                }
+
+                // For draft, basePrice can be 0
+                if (!decimal.TryParse(form["BasePrice"].ToString(), out decimal basePrice) || basePrice < 0)
+                {
+                    return BadRequest(new { message = "BasePrice must be greater than or equal to 0" });
+                }
+
+                var dto = new CreateItemDto
+                {
+                    SellerId = sellerId,
+                    CategoryId = categoryId,
+                    Title = title,
+                    Description = form["Description"].ToString(),
+                    ItemSpecifics = form["ItemSpecifics"].ToString(),
+                    Condition = form["Condition"].ToString(),
+                    Location = form["Location"].ToString(),
+                    BasePrice = basePrice
+                };
+
+                _logger.LogInformation("UpdateDraftItem called with id: {Id}, sellerId: {SellerId}, title: {Title}", id, dto.SellerId, dto.Title);
+
+                // Get image files
+                var images = form.Files.Where(f => f.Name == "images").ToList();
+
+                // Handle image uploads
+                string? imagesPath = null;
+                if (images != null && images.Count > 0)
+                {
+                    try
+                    {
+                        var savedPaths = await _fileUploadService.SaveImagesAsync(images, dto.Title);
+                        imagesPath = string.Join(",", savedPaths);
+                        _logger.LogInformation("Saved {Count} images for draft item '{Title}'", savedPaths.Count, dto.Title);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error saving images");
+                        return BadRequest(new { message = $"Error saving images: {ex.Message}" });
+                    }
+                }
+
+                var result = await _itemService.UpdateDraftItemAsync(id, dto, imagesPath);
+                if (result == null)
+                {
+                    _logger.LogWarning("UpdateDraftItemAsync returned null for id: {Id}", id);
+                    return NotFound(new { message = "Draft item not found or cannot be updated" });
+                }
+
+                _logger.LogInformation("Draft item updated successfully with ID: {ItemId}", result.Id);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid operation when updating draft item");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument when updating draft item");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating draft item");
                 return StatusCode(500, new { message = "Internal server error", error = ex.Message });
             }
         }
@@ -581,10 +680,11 @@ namespace BitNow_Backend.Controllers
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
 
-                // Only allow deletion of draft items
-                if (item.Status?.ToLower() != "draft")
+                // Only allow deletion of draft or pending items
+                var statusLower = item.Status?.ToLower();
+                if (statusLower != "draft" && statusLower != "pending")
                 {
-                    return BadRequest(new { message = "Chỉ có thể xóa các sản phẩm ở trạng thái bản nháp" });
+                    return BadRequest(new { message = "Chỉ có thể xóa các sản phẩm ở trạng thái bản nháp hoặc đang chờ duyệt" });
                 }
 
                 var result = await _itemService.DeleteItemAsync(id);

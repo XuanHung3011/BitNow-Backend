@@ -1,10 +1,13 @@
 using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
-using System;
 using BitNow_Backend.DAL.Models;
+using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace BitNow_Backend.BLL.Services
 {
@@ -12,6 +15,8 @@ namespace BitNow_Backend.BLL.Services
 	{
         private readonly IAuctionRepository _auctionRepository;
         private readonly IItemRepository _itemRepository;
+        private readonly IBidRepository _bidRepository;
+        private readonly BidNowDbContext _dbContext;
         // Cho phép cả trạng thái tạm dừng (paused) và hủy (cancelled)
         private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) 
         { 
@@ -23,14 +28,23 @@ namespace BitNow_Backend.BLL.Services
             "cancelled"
         };
 
-        public AuctionService(IAuctionRepository auctionRepository, IItemRepository itemRepository)
+        public AuctionService(
+            IAuctionRepository auctionRepository,
+            IItemRepository itemRepository,
+            IBidRepository bidRepository,
+            BidNowDbContext dbContext)
         {
             _auctionRepository = auctionRepository;
             _itemRepository = itemRepository;
+            _bidRepository = bidRepository;
+            _dbContext = dbContext;
         }
 
         public async Task<AuctionDetailDto?> GetDetailAsync(int id)
 		{
+			// Update status if needed before returning (lazy update)
+			await _auctionRepository.UpdateAuctionStatusIfNeededAsync(id);
+			
 			var a = await _auctionRepository.GetByIdAsync(id);
 			if (a == null) return null;
 			return new AuctionDetailDto
@@ -39,6 +53,7 @@ namespace BitNow_Backend.BLL.Services
 				ItemId = a.ItemId,
 				ItemTitle = a.Item.Title,
 				ItemDescription = a.Item.Description,
+				ItemSpecifics = a.Item.ItemSpecifics,
 				ItemImages = a.Item.Images,
 				CategoryId = a.Item.CategoryId,
                 CategoryName = a.Item.Category?.Name,
@@ -52,18 +67,21 @@ namespace BitNow_Backend.BLL.Services
 				EndTime = a.EndTime,
 				Status = a.Status,
 				BidCount = a.BidCount,
-				PausedAt = a.PausedAt
+				PausedAt = a.PausedAt,
+                WinnerId = a.WinnerId,
+                WinnerName = a.Winner?.FullName
 			};
 		}
 
         public async Task<PaginatedResult<AuctionListItemDto>> GetAuctionsWithFilterAsync(AuctionFilterDto filter)
 		{
 			var (auctions, totalCount) = await _auctionRepository.GetAuctionsWithFilterAsync(filter);
-			var now = DateTime.Now;
+			var now = DateTime.Now; // Use local time (Vietnam time) - matches database storage
 
 			var items = auctions.Select(a =>
 			{
-				// Determine display status
+				// Determine display status based on actual time, not just Status field
+				// Priority: cancelled > draft > scheduled > active > completed
 				string displayStatus;
                 if (a.Status != null && a.Status.Equals("paused", StringComparison.OrdinalIgnoreCase))
                 {
@@ -73,34 +91,54 @@ namespace BitNow_Backend.BLL.Services
                 {
                     displayStatus = "cancelled";
 				}
-				else if (a.Status != null && a.Status.ToLower() == "active")
+				// 2. Draft: status = "draft"
+				else if (a.Status != null && a.Status.ToLower() == "draft")
 				{
-					if (a.StartTime > now)
-					{
-						displayStatus = "scheduled";
-					}
-					else if (a.EndTime > now)
-					{
-						displayStatus = "active";
-					}
-					else
-					{
-						displayStatus = "completed";
-					}
+					displayStatus = "draft";
 				}
-				else if (a.EndTime < now || (a.Status != null && a.Status.ToLower() == "completed"))
+				// 3. Scheduled: Chưa đến giờ bắt đầu (StartTime > now)
+				else if (a.StartTime > now)
+				{
+					displayStatus = "scheduled";
+				}
+				// 4. Active: Đã bắt đầu và chưa kết thúc (StartTime <= now && EndTime > now)
+				else if (a.StartTime <= now && a.EndTime > now)
+				{
+					displayStatus = "active";
+				}
+				// 5. Completed: Đã kết thúc (EndTime <= now)
+				else if (a.EndTime <= now)
 				{
 					displayStatus = "completed";
 				}
+				// Fallback: Use status field if time logic doesn't match
 				else
 				{
 					displayStatus = a.Status?.ToLower() ?? "unknown";
+				}
+
+				// Parse images from item
+				var itemImages = a.Item?.Images;
+				var firstImage = "";
+				if (!string.IsNullOrEmpty(itemImages))
+				{
+					try
+					{
+						var imageList = System.Text.Json.JsonSerializer.Deserialize<List<string>>(itemImages);
+						firstImage = imageList?.FirstOrDefault() ?? "";
+					}
+					catch
+					{
+						// If not JSON, try comma-separated
+						firstImage = itemImages.Split(',').FirstOrDefault()?.Trim() ?? "";
+					}
 				}
 
 				return new AuctionListItemDto
 				{
 					Id = a.Id,
 					ItemTitle = a.Item?.Title ?? "",
+					ItemImages = itemImages, // Include full images string for frontend to parse
 					SellerName = a.Seller?.FullName,
 					CategoryName = a.Item?.Category?.Name,
 					StartingBid = a.StartingBid,
@@ -272,6 +310,10 @@ namespace BitNow_Backend.BLL.Services
             };
 
             var createdAuction = await _auctionRepository.CreateAsync(auction);
+
+            // Update item status to "archived" so it won't appear in "approved items" list anymore
+            // Item has been used for auction, so it should not be available for creating another auction
+            await _itemRepository.UpdateItemStatusAsync(dto.ItemId, "archived");
 
             return new AuctionResponseDto
             {
@@ -458,6 +500,162 @@ namespace BitNow_Backend.BLL.Services
             }).ToList();
 
             return result;
+        }
+
+        public async Task<AuctionCompletionResultDto> BuyNowAsync(int auctionId, int buyerId)
+        {
+            var auction = await _dbContext.Auctions
+                .Include(a => a.Item)
+                .FirstOrDefaultAsync(a => a.Id == auctionId)
+                ?? throw new InvalidOperationException("Không tìm thấy phiên đấu giá");
+
+            if (auction.BuyNowPrice == null)
+            {
+                throw new InvalidOperationException("Phiên đấu giá này không hỗ trợ mua ngay.");
+            }
+
+            if (!string.Equals(auction.Status, "active", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Phiên đấu giá không còn ở trạng thái hoạt động.");
+            }
+
+            if (auction.EndTime <= DateTime.Now)
+            {
+                throw new InvalidOperationException("Phiên đấu giá đã kết thúc.");
+            }
+
+            if (auction.WinnerId != null)
+            {
+                throw new InvalidOperationException("Phiên đấu giá đã có người chiến thắng.");
+            }
+
+            if (auction.SellerId == buyerId)
+            {
+                throw new InvalidOperationException("Người bán không thể mua sản phẩm của chính mình.");
+            }
+
+            var completedAt = DateTime.Now;
+
+            var affected = await _dbContext.Auctions
+                .Where(a => a.Id == auctionId && a.Status == auction.Status && a.WinnerId == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(a => a.Status, "completed")
+                    .SetProperty(a => a.WinnerId, buyerId)
+                    .SetProperty(a => a.CurrentBid, auction.BuyNowPrice)
+                    .SetProperty(a => a.EndTime, completedAt));
+
+            if (affected == 0)
+            {
+                throw new InvalidOperationException("Phiên đấu giá đã được hoàn tất trước đó.");
+            }
+
+            auction.Status = "completed";
+            auction.WinnerId = buyerId;
+            auction.CurrentBid = auction.BuyNowPrice;
+            auction.EndTime = completedAt;
+
+            await AddHistoryRecordIfMissingAsync(auction, auction.BuyNowPrice, completedAt);
+
+            _dbContext.Entry(auction).State = EntityState.Detached;
+            await _dbContext.SaveChangesAsync();
+
+            return new AuctionCompletionResultDto
+            {
+                AuctionId = auction.Id,
+                WinnerId = buyerId,
+                FinalPrice = auction.BuyNowPrice,
+                Status = "completed",
+                CompletionType = "buy-now",
+                CompletedAt = completedAt
+            };
+        }
+
+        public async Task<IReadOnlyList<AuctionCompletionResultDto>> FinalizeExpiredAuctionsAsync(CancellationToken cancellationToken = default)
+        {
+            var now = DateTime.Now;
+            var expiredAuctions = await _dbContext.Auctions
+                .Include(a => a.Item)
+                .Where(a => a.Status == "active" && a.EndTime <= now)
+                .ToListAsync(cancellationToken);
+
+            if (expiredAuctions.Count == 0)
+            {
+                return Array.Empty<AuctionCompletionResultDto>();
+            }
+
+            var results = new List<AuctionCompletionResultDto>(expiredAuctions.Count);
+
+            foreach (var auction in expiredAuctions)
+            {
+                var (winnerId, finalBid) = await ResolveWinnerFromBidsAsync(auction.Id, cancellationToken);
+
+                auction.Status = "completed";
+                auction.WinnerId = winnerId;
+                if (finalBid.HasValue)
+                {
+                    auction.CurrentBid = finalBid.Value;
+                }
+
+                var completion = new AuctionCompletionResultDto
+                {
+                    AuctionId = auction.Id,
+                    WinnerId = winnerId,
+                    FinalPrice = finalBid,
+                    Status = "completed",
+                    CompletionType = "timeout",
+                    CompletedAt = now
+                };
+
+                results.Add(completion);
+
+                await AddHistoryRecordIfMissingAsync(auction, finalBid, now, cancellationToken);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return results;
+        }
+
+        private async Task<(int? winnerId, decimal? finalPrice)> ResolveWinnerFromBidsAsync(int auctionId, CancellationToken cancellationToken = default)
+        {
+            var highestBid = await _bidRepository.GetHighestBidByAuctionAsync(auctionId, cancellationToken);
+            if (highestBid == null)
+            {
+                return (null, null);
+            }
+
+            return (highestBid.BidderId, highestBid.Amount);
+        }
+
+        private async Task AddHistoryRecordIfMissingAsync(Auction auction, decimal? finalBid, DateTime completedAt, CancellationToken cancellationToken = default)
+        {
+            var exists = await _dbContext.AuctionHistories
+                .AnyAsync(h => h.AuctionId == auction.Id, cancellationToken);
+
+            if (exists)
+            {
+                return;
+            }
+
+            var item = auction.Item ?? await _itemRepository.GetByIdAsync(auction.ItemId);
+
+            var history = new AuctionHistory
+            {
+                AuctionId = auction.Id,
+                ItemId = auction.ItemId,
+                Title = item?.Title ?? $"Auction #{auction.Id}",
+                CategoryId = item?.CategoryId ?? 0,
+                SellerId = auction.SellerId,
+                WinnerId = auction.WinnerId,
+                StartingBid = auction.StartingBid,
+                FinalBid = finalBid,
+                TotalBids = auction.BidCount ?? 0,
+                StartTime = auction.StartTime,
+                EndTime = auction.EndTime,
+                CompletedAt = completedAt
+            };
+
+            _dbContext.AuctionHistories.Add(history);
         }
     }
 }
