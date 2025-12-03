@@ -1,4 +1,5 @@
 using BitNow_Backend.DAL.DTOs;
+using System.Threading;
 
 namespace BitNow_Backend.BLL.IServices
 {
@@ -16,6 +17,11 @@ namespace BitNow_Backend.BLL.IServices
 
         Task<List<SellerAuctionDto>> GetAuctionsBySellerAsync(int sellerId);
 
+
         Task<IEnumerable<ItemResponseDto>> GetItemsByAuctionIdsAsync(IEnumerable<int> auctionIds);
+
+        Task<AuctionCompletionResultDto> BuyNowAsync(int auctionId, int buyerId);
+        Task<IReadOnlyList<AuctionCompletionResultDto>> FinalizeExpiredAuctionsAsync(CancellationToken cancellationToken = default);
+
     }
 }

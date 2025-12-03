@@ -9,6 +9,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public int ItemId { get; set; }
 		public string ItemTitle { get; set; } = null!;
 		public string? ItemDescription { get; set; }
+		public string? ItemSpecifics { get; set; }
 		public string? ItemImages { get; set; }
 		public int CategoryId { get; set; }
         public string? CategoryName { get; set; }
@@ -23,6 +24,8 @@ namespace BitNow_Backend.DAL.DTOs
 		public string Status { get; set; } = null!;
 		public int? BidCount { get; set; }
 		public DateTime? PausedAt { get; set; }
+        public int? WinnerId { get; set; }
+        public string? WinnerName { get; set; }
 	}
 
 	public class AuctionListItemDto
@@ -123,5 +126,20 @@ namespace BitNow_Backend.DAL.DTOs
         public int? WinnerId { get; set; }
         public string? WinnerName { get; set; }
         public bool HasRated { get; set; }
+    }
+
+    public class BuyNowRequestDto
+    {
+        public int BuyerId { get; set; }
+    }
+
+    public class AuctionCompletionResultDto
+    {
+        public int AuctionId { get; set; }
+        public int? WinnerId { get; set; }
+        public decimal? FinalPrice { get; set; }
+        public string Status { get; set; } = "completed";
+        public string CompletionType { get; set; } = "timeout"; // timeout | buy-now | manual
+        public DateTime CompletedAt { get; set; }
     }
 }

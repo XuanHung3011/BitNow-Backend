@@ -161,6 +161,7 @@ public partial class BidNowDbContext : DbContext
             entity.Property(e => e.Condition).HasMaxLength(50).HasColumnName("condition");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())").HasColumnName("created_at");
             entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.ItemSpecifics).HasColumnName("item_specifics");
             entity.Property(e => e.Images).HasColumnName("images");
             entity.Property(e => e.Location).HasMaxLength(255).HasColumnName("location");
             entity.Property(e => e.SellerId).HasColumnName("seller_id");

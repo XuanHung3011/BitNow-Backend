@@ -190,6 +190,9 @@ public class AdminAuctionsController : ControllerBase
             {
                 auctionId = id,
                 status = normalizedStatus,
+                winnerId = string.Equals(normalizedStatus, "completed", StringComparison.OrdinalIgnoreCase) ? auction.WinnerId : null,
+                finalPrice = string.Equals(normalizedStatus, "completed", StringComparison.OrdinalIgnoreCase) ? auction.CurrentBid : null,
+                completionType = "status-change",
                 timestamp = DateTime.Now
             };
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
@@ -273,6 +276,9 @@ public class AdminAuctionsController : ControllerBase
             {
                 auctionId = id,
                 status = "active",
+                winnerId = auction.WinnerId,
+                finalPrice = auction.CurrentBid,
+                completionType = "status-change",
                 timestamp = DateTime.Now
             };
             await _auctionHub.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);

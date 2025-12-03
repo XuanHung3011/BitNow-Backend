@@ -36,6 +36,9 @@ namespace BitNow_Backend.DAL.IRepositories
         // Create new item
         Task<Item> CreateAsync(Item item);
 
+        // Update item
+        Task<Item?> UpdateAsync(Item item);
+
         // Delete item
         Task<bool> DeleteAsync(int id);
     }

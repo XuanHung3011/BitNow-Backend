@@ -196,6 +196,50 @@ public class AuctionsControllerTests
     }
 
     [Fact]
+    public async Task BuyNow_WithValidRequest_ReturnsOk()
+    {
+        // Arrange
+        var request = new BuyNowRequestDto { BuyerId = 2 };
+        var completion = new AuctionCompletionResultDto
+        {
+            AuctionId = 1,
+            WinnerId = 2,
+            FinalPrice = 500,
+            Status = "completed",
+            CompletionType = "buy-now",
+            CompletedAt = DateTime.UtcNow
+        };
+
+        _auctionServiceMock.Setup(x => x.BuyNowAsync(1, request.BuyerId))
+            .ReturnsAsync(completion);
+
+        var mockClients = new Mock<IHubClients>();
+        var mockGroup = new Mock<IClientProxy>();
+        _hubContextMock.Setup(x => x.Clients).Returns(mockClients.Object);
+        mockClients.Setup(x => x.Group(It.IsAny<string>())).Returns(mockGroup.Object);
+        mockGroup.Setup(x => x.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), default))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _controller.BuyNow(1, request);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        var okResult = result.Result as OkObjectResult;
+        okResult!.Value.Should().BeEquivalentTo(completion);
+    }
+
+    [Fact]
+    public async Task BuyNow_WithMissingBuyer_ReturnsBadRequest()
+    {
+        // Act
+        var result = await _controller.BuyNow(1, new BuyNowRequestDto { BuyerId = 0 });
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
     public async Task GetRecentBids_ReturnsOk()
     {
         // Arrange

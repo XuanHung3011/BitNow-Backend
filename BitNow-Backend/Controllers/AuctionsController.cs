@@ -83,6 +83,9 @@ namespace BitNow_Backend.Controllers
                 {
                     auctionId = result.Id,
                     status = result.Status ?? "active",
+                    winnerId = (int?)null,
+                    finalPrice = (decimal?)null,
+                    completionType = "status-change",
                     timestamp = DateTime.Now
                 };
                 await _hubContext.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
@@ -153,6 +156,46 @@ namespace BitNow_Backend.Controllers
 				return BadRequest(new { message = ex.Message });
 			}
 		}
+
+        [HttpPost("{id:int}/buy-now")]
+        public async Task<ActionResult<AuctionCompletionResultDto>> BuyNow(int id, [FromBody] BuyNowRequestDto request)
+        {
+            if (request == null || request.BuyerId <= 0)
+            {
+                return BadRequest(new { message = "BuyerId is required" });
+            }
+
+            try
+            {
+                var result = await _auctionService.BuyNowAsync(id, request.BuyerId);
+
+                var payload = new
+                {
+                    auctionId = result.AuctionId,
+                    status = result.Status,
+                    winnerId = result.WinnerId,
+                    finalPrice = result.FinalPrice,
+                    completionType = result.CompletionType,
+                    timestamp = result.CompletedAt
+                };
+
+                await _hubContext.Clients.Group($"auction-{id}").SendAsync("AuctionStatusUpdated", payload);
+                await _hubContext.Clients.Group(AuctionHub.AdminAuctionsGroup).SendAsync("AdminAuctionStatusUpdated", payload);
+                await _hubContext.Clients.Group(AuctionHub.AdminDashboardGroup).SendAsync("AdminStatsUpdated");
+                await _hubContext.Clients.Group(AuctionHub.AdminAnalyticsGroup).SendAsync("AdminAnalyticsUpdated");
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error triggering buy-now for auction {AuctionId}", id);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
 
 		[HttpGet("{id}/bids/recent")]
 		public async Task<ActionResult<IReadOnlyList<BidDto>>> GetRecentBids(int id, [FromQuery] int limit = 100)
