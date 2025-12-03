@@ -1,6 +1,7 @@
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace BitNow_Backend.DAL.Repositories
 {
@@ -58,6 +59,15 @@ namespace BitNow_Backend.DAL.Repositories
                 .Select(b => b.BidderId)
                 .Distinct()
                 .ToListAsync();
+        }
+
+        public async Task<Bid?> GetHighestBidByAuctionAsync(int auctionId, CancellationToken cancellationToken = default)
+        {
+            return await _ctx.Bids
+                .Where(b => b.AuctionId == auctionId)
+                .OrderByDescending(b => b.Amount)
+                .ThenByDescending(b => b.BidTime)
+                .FirstOrDefaultAsync(cancellationToken);
         }
     }
 }
