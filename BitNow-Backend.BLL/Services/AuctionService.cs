@@ -371,6 +371,13 @@ namespace BitNow_Backend.BLL.Services
         {
             var (auctions, totalCount) = await _auctionRepository.GetWonAuctionsByBidderAsync(bidderId, page, pageSize);
 
+            // Get all orders for these auctions in one query
+            var auctionIds = auctions.Select(a => a.Id).ToList();
+            var orders = await _dbContext.Orders
+                .Include(o => o.Payment)
+                .Where(o => o.BuyerId == bidderId && auctionIds.Contains(o.AuctionId))
+                .ToListAsync();
+
             var items = auctions.Select(a =>
             {
                 // Get user's highest bid (which should be the winning bid)
@@ -380,6 +387,10 @@ namespace BitNow_Backend.BLL.Services
                 // Check if user has rated (you'll need to implement this based on your Rating system)
                 // For now, defaulting to false
                 var hasRated = false; // TODO: Check if rating exists for this auction and buyer
+
+                // Find order for this auction
+                var order = orders.FirstOrDefault(o => o.AuctionId == a.Id);
+                var payment = order?.Payment;
 
                 return new BuyerWonAuctionDto
                 {
@@ -393,7 +404,14 @@ namespace BitNow_Backend.BLL.Services
                     Status = a.Status ?? "completed",
                     SellerName = a.Seller?.FullName,
                     SellerId = a.SellerId,
-                    HasRated = hasRated
+                    HasRated = hasRated,
+                    // Order and Payment information
+                    OrderId = order?.Id,
+                    OrderStatus = order?.OrderStatus,
+                    PaymentStatus = payment?.PaymentStatus,
+                    PaidAt = payment?.PaidAt,
+                    HasOrder = order != null,
+                    HasPayment = payment != null
                 };
             }).ToList();
 
@@ -635,6 +653,31 @@ namespace BitNow_Backend.BLL.Services
                 if (finalBid.HasValue)
                 {
                     auction.CurrentBid = finalBid.Value;
+                }
+
+                // Create Order for winner if there is a winner
+                if (winnerId.HasValue && finalBid.HasValue)
+                {
+                    // Check if order already exists
+                    var existingOrder = await _dbContext.Orders
+                        .FirstOrDefaultAsync(o => o.AuctionId == auction.Id, cancellationToken);
+
+                    if (existingOrder == null)
+                    {
+                        var order = new Order
+                        {
+                            AuctionId = auction.Id,
+                            BuyerId = winnerId.Value,
+                            SellerId = auction.SellerId,
+                            FinalPrice = finalBid.Value,
+                            OrderStatus = "awaiting_payment", // Winner needs to pay
+                            CreatedAt = now
+                        };
+
+                        _dbContext.Orders.Add(order);
+                        // Save immediately to ensure order is available
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
                 }
 
                 var completion = new AuctionCompletionResultDto
