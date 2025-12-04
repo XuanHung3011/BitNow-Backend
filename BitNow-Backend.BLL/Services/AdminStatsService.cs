@@ -53,20 +53,20 @@ public class AdminStatsService : IAdminStatsService
                 c.CreatedAt.HasValue && c.CreatedAt.Value < now.AddDays(-3))
             .CountAsync();
 
-        // Revenue this month (from auctions that ended this month with a winner - use CurrentBid as final bid)
-        // Check for auctions that ended in the month range and have a winner (regardless of status)
-        var revenueThisMonth = await _context.Auctions
-            .Where(a => a.WinnerId != null &&
-                a.CurrentBid != null &&
-                a.EndTime >= startOfMonth && a.EndTime < startOfMonth.AddMonths(1))
-            .SumAsync(a => a.CurrentBid ?? 0);
+        // Revenue this month (from payments that were paid this month)
+        // Only count payments with status "paid_held" or "released_to_seller" that have been paid
+        var revenueThisMonth = await _context.Payments
+            .Where(p => (p.PaymentStatus == "paid_held" || p.PaymentStatus == "released_to_seller") &&
+                p.PaidAt != null &&
+                p.PaidAt >= startOfMonth && p.PaidAt < startOfMonth.AddMonths(1))
+            .SumAsync(p => p.Amount);
 
         // Revenue last month
-        var revenueLastMonth = await _context.Auctions
-            .Where(a => a.WinnerId != null &&
-                a.CurrentBid != null &&
-                a.EndTime >= startOfLastMonth && a.EndTime < startOfMonth)
-            .SumAsync(a => a.CurrentBid ?? 0);
+        var revenueLastMonth = await _context.Payments
+            .Where(p => (p.PaymentStatus == "paid_held" || p.PaymentStatus == "released_to_seller") &&
+                p.PaidAt != null &&
+                p.PaidAt >= startOfLastMonth && p.PaidAt < startOfMonth)
+            .SumAsync(p => p.Amount);
 
         // Calculate revenue change percent
         var revenueChangePercent = revenueLastMonth > 0
@@ -160,16 +160,16 @@ public class AdminStatsService : IAdminStatsService
                 break;
 
             case "revenue":
-                // Get revenue data for last 12 months
+                // Get revenue data for last 12 months from payments
                 for (int i = 11; i >= 0; i--)
                 {
                     var monthStart = new DateTime(now.Year, now.Month, 1).AddMonths(-i);
                     var monthEnd = monthStart.AddMonths(1);
-                    var revenue = await _context.Auctions
-                        .Where(a => a.WinnerId != null &&
-                            a.CurrentBid != null &&
-                            a.EndTime >= monthStart && a.EndTime < monthEnd)
-                        .SumAsync(a => a.CurrentBid ?? 0);
+                    var revenue = await _context.Payments
+                        .Where(p => (p.PaymentStatus == "paid_held" || p.PaymentStatus == "released_to_seller") &&
+                            p.PaidAt != null &&
+                            p.PaidAt >= monthStart && p.PaidAt < monthEnd)
+                        .SumAsync(p => p.Amount);
                     
                     chartData.Add(new ChartDataPoint
                     {
@@ -179,24 +179,25 @@ public class AdminStatsService : IAdminStatsService
                 }
                 
                 // Summary
-                var revenueThisMonth = await _context.Auctions
-                    .Where(a => a.WinnerId != null &&
-                        a.CurrentBid != null &&
-                        a.EndTime >= new DateTime(now.Year, now.Month, 1) && 
-                        a.EndTime < new DateTime(now.Year, now.Month, 1).AddMonths(1))
-                    .SumAsync(a => a.CurrentBid ?? 0);
-                var revenueLastMonth = await _context.Auctions
-                    .Where(a => a.WinnerId != null &&
-                        a.CurrentBid != null &&
-                        a.EndTime >= new DateTime(now.Year, now.Month, 1).AddMonths(-1) && 
-                        a.EndTime < new DateTime(now.Year, now.Month, 1))
-                    .SumAsync(a => a.CurrentBid ?? 0);
-                var totalRevenue = await _context.Auctions
-                    .Where(a => a.WinnerId != null && a.CurrentBid != null)
-                    .SumAsync(a => a.CurrentBid ?? 0);
+                var revenueThisMonthDetail = await _context.Payments
+                    .Where(p => (p.PaymentStatus == "paid_held" || p.PaymentStatus == "released_to_seller") &&
+                        p.PaidAt != null &&
+                        p.PaidAt >= new DateTime(now.Year, now.Month, 1) && 
+                        p.PaidAt < new DateTime(now.Year, now.Month, 1).AddMonths(1))
+                    .SumAsync(p => p.Amount);
+                var revenueLastMonthDetail = await _context.Payments
+                    .Where(p => (p.PaymentStatus == "paid_held" || p.PaymentStatus == "released_to_seller") &&
+                        p.PaidAt != null &&
+                        p.PaidAt >= new DateTime(now.Year, now.Month, 1).AddMonths(-1) && 
+                        p.PaidAt < new DateTime(now.Year, now.Month, 1))
+                    .SumAsync(p => p.Amount);
+                var totalRevenue = await _context.Payments
+                    .Where(p => (p.PaymentStatus == "paid_held" || p.PaymentStatus == "released_to_seller") &&
+                        p.PaidAt != null)
+                    .SumAsync(p => p.Amount);
                 
-                summary["Doanh thu tháng này"] = revenueThisMonth;
-                summary["Doanh thu tháng trước"] = revenueLastMonth;
+                summary["Doanh thu tháng này"] = revenueThisMonthDetail;
+                summary["Doanh thu tháng trước"] = revenueLastMonthDetail;
                 summary["Tổng doanh thu"] = totalRevenue;
                 break;
 

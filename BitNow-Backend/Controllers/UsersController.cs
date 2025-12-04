@@ -1,6 +1,8 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using BitNow_Backend.Services;
+using System.IO;
 
 namespace BitNow_Backend.Controllers;
 
@@ -10,11 +12,13 @@ public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly ILogger<UsersController> _logger;
+    private readonly IFileUploadService _fileUploadService;
 
-    public UsersController(IUserService userService, ILogger<UsersController> logger)
+    public UsersController(IUserService userService, ILogger<UsersController> logger, IFileUploadService fileUploadService)
     {
         _userService = userService;
         _logger = logger;
+        _fileUploadService = fileUploadService;
     }
 
     /// <summary>
@@ -292,6 +296,54 @@ public class UsersController : ControllerBase
         {
             _logger.LogError(ex, "Error validating credentials for {Email}", loginDto.Email);
             return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Upload avatar for user
+    /// </summary>
+    [HttpPost("{id}/avatar")]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<object>> UploadAvatar(int id, IFormFile file)
+    {
+        try
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "File is required" });
+
+            // Validate file type
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+                return BadRequest(new { message = $"File extension {extension} is not allowed. Allowed: {string.Join(", ", allowedExtensions)}" });
+
+            // Validate file size (10MB)
+            if (file.Length > 10 * 1024 * 1024)
+                return BadRequest(new { message = "File size exceeds maximum allowed size of 10MB" });
+
+            // Get user to use their name for filename
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = $"User with ID {id} not found" });
+
+            // Upload file using FileUploadService
+            var avatarPath = await _fileUploadService.SaveImageAsync(file, $"user-{user.FullName}", 0);
+
+            // Update user avatar URL
+            var updateDto = new UserUpdateDto
+            {
+                AvatarUrl = avatarPath
+            };
+            var updatedUser = await _userService.UpdateAsync(id, updateDto);
+            if (updatedUser == null)
+                return NotFound(new { message = $"User with ID {id} not found" });
+
+            return Ok(new { avatarUrl = avatarPath });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading avatar for user {UserId}", id);
+            return StatusCode(500, new { message = "Internal server error" });
         }
     }
 }
