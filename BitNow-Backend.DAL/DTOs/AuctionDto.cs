@@ -106,6 +106,13 @@ namespace BitNow_Backend.DAL.DTOs
         public string? SellerName { get; set; }
         public int SellerId { get; set; }
         public bool HasRated { get; set; }
+        // Order and Payment information
+        public int? OrderId { get; set; }
+        public string? OrderStatus { get; set; } // awaiting_payment, awaiting_shipment, shipped, dispute, completed, cancelled
+        public string? PaymentStatus { get; set; } // pending, paid_held, hold_dispute, refunded_to_buyer, released_to_seller
+        public DateTime? PaidAt { get; set; }
+        public bool HasOrder { get; set; }
+        public bool HasPayment { get; set; }
     }
 
     public class SellerAuctionDto
