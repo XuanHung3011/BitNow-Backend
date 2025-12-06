@@ -1,255 +1,262 @@
-﻿using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
-using BitNow_Backend.BLL.IServices;
+﻿using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace BitNow_Backend.BLL.Services
 {
-    /// <summary>
-    /// Recommendation service sử dụng OpenAI (ChatGPT API) để chọn ra các item phù hợp cho người dùng.
-    /// </summary>
+
+    /// Recommendation service sử dụng vector similarity search với Pinecone để chọn ra các item phù hợp cho người dùng.
     public class RecommendationService : IRecommendationService
     {
         private readonly IItemService _itemService;
         private readonly IBidService _bidService;
-        private readonly IAuctionService _auctionService;
         private readonly IWatchlistService _watchlistService;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
+        private readonly ISearchKeywordService _searchKeywordService;
+        private readonly IUserAuctionViewService _userAuctionViewService;
+        private readonly IVectorSyncService _vectorSyncService;
+        private readonly IPineconeService _pineconeService;
+        private readonly IAuctionService _auctionService;
         private readonly ILogger<RecommendationService> _logger;
+
+        // Ngưỡng điểm tương đồng tối thiểu 
+        private const float SIMILARITY_THRESHOLD = 0.5f;
 
         public RecommendationService(
             IItemService itemService,
             IBidService bidService,
-            IAuctionService auctionService,
             IWatchlistService watchlistService,
-            IHttpClientFactory httpClientFactory,
-            IConfiguration configuration,
+            ISearchKeywordService searchKeywordService,
+            IUserAuctionViewService userAuctionViewService,
+            IVectorSyncService vectorSyncService,
+            IPineconeService pineconeService,
+            IAuctionService auctionService,
             ILogger<RecommendationService> logger)
         {
             _itemService = itemService;
             _bidService = bidService;
-            _auctionService = auctionService;
             _watchlistService = watchlistService;
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
+            _searchKeywordService = searchKeywordService;
+            _userAuctionViewService = userAuctionViewService;
+            _vectorSyncService = vectorSyncService;
+            _pineconeService = pineconeService;
+            _auctionService = auctionService;
             _logger = logger;
         }
 
-        private sealed class OpenAiRecommendationResponse
-        {
-            public List<int> ItemIds { get; set; } = new();
-        }
-
-        public async Task<IEnumerable<ItemResponseDto>> GetPersonalizedItemsAsync(int userId, int limit, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<ItemResponseDto>> GetPersonalizedItemsAsync(
+            int userId, int limit, CancellationToken cancellationToken = default)
         {
             if (userId <= 0)
             {
                 throw new ArgumentException("userId must be greater than 0", nameof(userId));
             }
 
-            if (limit < 1) limit = 8;
+            if (limit < 1) limit = 4;
             if (limit > 24) limit = 24;
 
-            // Lấy tất cả item có đấu giá đang active để AI chọn (ưu tiên đa dạng, không chỉ hot)
-            var allApprovedItems = await _itemService.GetAllApprovedItemsAsync();
-            var candidateItems = allApprovedItems
-                .Where(i =>
-                    i.AuctionId.HasValue &&
-                    string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
-                    (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.Now))
-                .OrderBy(i => i.AuctionEndTime ?? DateTime.MaxValue)
-                .Take(Math.Clamp(limit * 6, limit, 60))
+            // Lấy lịch sử user
+            var biddingHistory = await _bidService.GetBiddingHistoryAsync(userId, 1, 20);
+            var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(20).ToList();
+            var searchKeywords = await _searchKeywordService.GetRecentKeywordsAsync(userId, 20);
+            var viewedAuctionIds = await _userAuctionViewService.GetRecentViewedAuctionIdsAsync(userId, 20, cancellationToken);
+            var viewedItems = viewedAuctionIds.Any()
+                ? await _auctionService.GetItemsByAuctionIdsAsync(viewedAuctionIds.ToHashSet())
+                : Enumerable.Empty<ItemResponseDto>();
+
+            var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any() || searchKeywords.Any() || viewedAuctionIds.Any();
+
+            // Fallback cho new users
+            if (!hasUserData)
+            {
+                _logger.LogInformation("User {UserId} is new. Returning random recommendations.", userId);
+                var approvedItemsForFallback = await _itemService.GetAllApprovedItemsAsync();
+                var activeItems = approvedItemsForFallback
+                    .Where(i =>
+                        i.AuctionId.HasValue &&
+                        string.Equals(i.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase) &&
+                        (!i.AuctionEndTime.HasValue || i.AuctionEndTime > DateTime.UtcNow))
+                    .ToList();
+
+                var random = new Random(userId);
+                return activeItems.OrderBy(_ => random.Next()).Take(limit).ToList();
+            }
+
+            // Tạo textbuyer và embedding
+            var textbuyer = BuildTextBuyer(biddingHistory.Data, watchlistItems, searchKeywords, viewedItems);
+            _logger.LogInformation("User {UserId} textbuyer:\n{TextBuyer}", userId, textbuyer);
+
+            //  Gọi GenerateEmbeddingAsync từ VectorSyncService
+            var queryVector = await _vectorSyncService.GenerateEmbeddingAsync(textbuyer, cancellationToken);
+
+            // Query Pinecone với filter
+            var currentTimeUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var filter = new Dictionary<string, object>
+            {
+                ["$and"] = new[]
+                {
+                    new Dictionary<string, object>
+                    {
+                        ["status"] = new Dictionary<string, object> { ["$in"] = new[] { "active", "scheduled" } }
+                    },
+                    new Dictionary<string, object>
+                    {
+                        ["$or"] = new[]
+                        {
+                            new Dictionary<string, object>
+                            {
+                                ["endTime"] = new Dictionary<string, object> { ["$eq"] = 0 }
+                            },
+                            new Dictionary<string, object>
+                            {
+                                ["endTime"] = new Dictionary<string, object> { ["$gt"] = currentTimeUnix }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var searchLimit = Math.Max(limit * 2, 20);
+            var similarResults = await _pineconeService.QuerySimilarAsync(
+                queryVector, searchLimit, filter, cancellationToken);
+
+            // Log top results
+            _logger.LogInformation(
+                "User {UserId}: Pinecone returned {@TopResults}",
+                userId,
+                similarResults.Take(10).Select(r => new { r.id, score = r.score.ToString("F3") }));
+
+            // Filter theo threshold
+            var filteredResults = similarResults
+                .Where(r => r.score >= SIMILARITY_THRESHOLD)
                 .ToList();
 
-            if (!candidateItems.Any())
+            _logger.LogInformation(
+                "User {UserId}: {TotalResults} total, {FilteredCount} passed threshold {Threshold}",
+                userId, similarResults.Count, filteredResults.Count, SIMILARITY_THRESHOLD);
+
+            if (!filteredResults.Any())
             {
-                return candidateItems;
+                _logger.LogWarning("User {UserId}: No items passed threshold", userId);
+                return Enumerable.Empty<ItemResponseDto>();
             }
 
-            // Lấy thêm ngữ cảnh: đấu giá đang tham gia, watchlist, lịch sử
-            var biddingHistory = await _bidService.GetBiddingHistoryAsync(userId, 1, 20);
-            var activeBids = await _auctionService.GetActiveBidsByBuyerAsync(userId, 1, 50);
-            var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(50).ToList();
+            // Lấy auction IDs
+            var auctionIds = filteredResults
+                .Select(r => r.id.Replace("auction_", ""))
+                .Where(id => int.TryParse(id, out _))
+                .Select(int.Parse)
+                .ToHashSet();
 
-            // Thử gọi OpenAI, nếu lỗi thì fallback: trả về candidateItems như cũ
-            try
+            // Tạo score dictionary
+            var scoreDict = filteredResults.ToDictionary(
+                r => int.Parse(r.id.Replace("auction_", "")),
+                r => r.score
+            );
+
+            // Lấy items và sort theo similarity score
+            var items = await _auctionService.GetItemsByAuctionIdsAsync(auctionIds);
+
+
+            var recommendedItems = items
+            .Where(i => i.AuctionId.HasValue)
+            .OrderByDescending(i => scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f))
+            .Take(limit)
+            .ToList();
+
+            _logger.LogInformation(
+                "User {UserId}: Returning {@Items}",
+                userId,
+                recommendedItems.Select(i => new {
+                    AuctionId = i.AuctionId,
+                    Title = i.Title,
+                    Score = scoreDict.GetValueOrDefault(i.AuctionId!.Value, 0f).ToString("F3")
+                }));
+
+            return recommendedItems;
+        }
+
+
+        private static string BuildTextBuyer(
+            IEnumerable<BiddingHistoryDto> biddingHistory,
+            IEnumerable<WatchlistItemDto> watchlist,
+            IEnumerable<string> searchKeywords,
+            IEnumerable<ItemResponseDto> viewedItems)
+        {
+            var parts = new List<string>();
+
+            // Thêm thông tin từ bidding history 
+            if (biddingHistory.Any())
             {
-                var apiKey = _configuration["OpenAI:ApiKey"];
-                if (string.IsNullOrWhiteSpace(apiKey))
-                {
-                    _logger.LogWarning("OpenAI API key is not configured. Falling back to non-AI recommendations.");
-                    return candidateItems.Take(limit).ToList();
-                }
-
-                var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
-
-                var client = _httpClientFactory.CreateClient("OpenAI");
-                client.BaseAddress = new Uri("https://api.openai.com");
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-                // Chuẩn bị dữ liệu rút gọn để gửi lên AI (tránh payload quá lớn)
-                var historySummary = biddingHistory.Data
-                    .OrderByDescending(h => h.BidTime)
+                var biddingItems = biddingHistory
                     .Take(20)
-                    .Select(h => new
+                    .Select(h =>
                     {
-                        auctionId = h.AuctionId,
-                        title = h.ItemTitle,
-                        category = h.CategoryName,
-                        yourBid = h.YourBid,
-                        status = h.Status
-                    });
+                        var itemParts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(h.ItemTitle))
+                            itemParts.Add(h.ItemTitle);
+                        if (!string.IsNullOrWhiteSpace(h.CategoryName))
+                            itemParts.Add($"({h.CategoryName})");
+                        return itemParts.Any() ? string.Join(" ", itemParts) : null;
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
 
-                var activeBidsSummary = activeBids.Data
-                    .Take(30)
-                    .Select(b => new
-                    {
-                        auctionId = b.AuctionId,
-                        title = b.ItemTitle,
-                        category = b.CategoryName,
-                        currentBid = b.CurrentBid,
-                        yourHighestBid = b.YourHighestBid,
-                        isLeading = b.IsLeading,
-                        endTime = b.EndTime
-                    });
-
-                var watchlistSummary = watchlistItems.Select(w => new
+                if (biddingItems.Any())
                 {
-                    auctionId = w.AuctionId,
-                    title = w.ItemTitle,
-                    currentBid = w.CurrentBid ?? w.StartingBid,
-                    endTime = w.EndTime,
-                    status = w.Status
-                });
-
-                var itemsSummary = candidateItems.Select(i => new
-                {
-                    itemId = i.Id,
-                    auctionId = i.AuctionId,
-                    title = i.Title,
-                    category = i.CategoryName,
-                    basePrice = i.BasePrice,
-                    currentBid = i.CurrentBid,
-                    bidCount = i.BidCount,
-                    description = i.Description
-                });
-
-                var userPromptObject = new
-                {
-                    userId,
-                    activeBids = activeBidsSummary,
-                    watchlist = watchlistSummary,
-                    history = historySummary,
-                    candidates = itemsSummary,
-                    limit
-                };
-
-                var userPromptJson = JsonSerializer.Serialize(userPromptObject);
-
-                var payload = new
-                {
-                    model,
-                    messages = new[]
-                    {
-                        new
-                        {
-                            role = "system",
-                            content = "You are a recommendation engine for an online auction platform. " +
-                                      "Based on the user's previous bidding history and the list of candidate items, " +
-                                      "you must pick the best items for this specific user. " +
-                                      "Always respond with a pure JSON object only, no extra text."
-                        },
-                        new
-                        {
-                            role = "user",
-                            content = "Here is the user context and candidate items in JSON format. " +
-                                      "Return JSON: { \"itemIds\": [<itemId1>, <itemId2>, ...] } with at most 'limit' items.\n\n" +
-                                      userPromptJson
-                        }
-                    },
-                    temperature = 0.3,
-                    response_format = new
-                    {
-                        type = "json_object"
-                    }
-                };
-
-                var json = JsonSerializer.Serialize(payload);
-                using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
-                {
-                    Content = new StringContent(json, Encoding.UTF8, "application/json")
-                };
-
-                using var response = await client.SendAsync(request, cancellationToken);
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorText = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogWarning("OpenAI API returned non-success status {Status}: {Body}", response.StatusCode, errorText);
-                    return candidateItems.Take(limit).ToList();
+                    parts.Add($"Bidding history: {string.Join(", ", biddingItems)}");
                 }
-
-                using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
-
-                var root = document.RootElement;
-                var choices = root.GetProperty("choices");
-                if (choices.GetArrayLength() == 0)
-                {
-                    return candidateItems.Take(limit).ToList();
-                }
-
-                var firstChoice = choices[0];
-                var message = firstChoice.GetProperty("message");
-                var content = message.GetProperty("content").GetString();
-                if (string.IsNullOrWhiteSpace(content))
-                {
-                    return candidateItems.Take(limit).ToList();
-                }
-
-                OpenAiRecommendationResponse? parsed;
-                try
-                {
-                    parsed = JsonSerializer.Deserialize<OpenAiRecommendationResponse>(content, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to parse OpenAI recommendation response. Content: {Content}", content);
-                    return candidateItems.Take(limit).ToList();
-                }
-
-                if (parsed == null || parsed.ItemIds == null || parsed.ItemIds.Count == 0)
-                {
-                    return candidateItems.Take(limit).ToList();
-                }
-
-                var idSet = new HashSet<int>(parsed.ItemIds);
-                var selected = candidateItems.Where(i => idSet.Contains(i.Id)).Take(limit).ToList();
-
-                // Nếu AI trả về id không trùng khớp, fallback thêm các item còn thiếu
-                if (selected.Count < limit)
-                {
-                    var remaining = candidateItems
-                        .Where(i => !selected.Any(s => s.Id == i.Id))
-                        .Take(limit - selected.Count);
-                    selected.AddRange(remaining);
-                }
-
-                return selected;
             }
-            catch (Exception ex)
+
+            // Thêm thông tin từ watchlist 
+            if (watchlist.Any())
             {
-                _logger.LogError(ex, "Error while calling OpenAI for recommendations. Falling back to general items.");
-                return candidateItems.Take(limit).ToList();
+                var watchlistItems = watchlist
+                    .Take(20)
+                    .Select(w =>
+                    {
+                        var itemParts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(w.ItemTitle))
+                            itemParts.Add(w.ItemTitle);
+                        if (!string.IsNullOrWhiteSpace(w.CategoryName))
+                            itemParts.Add($"({w.CategoryName})");
+                        return itemParts.Any() ? string.Join(" ", itemParts) : null;
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
+
+                if (watchlistItems.Any())
+                {
+                    parts.Add($"Watchlist: {string.Join(", ", watchlistItems)}");
+                }
             }
+
+            // Thêm thông tin từ các từ khóa tìm kiếm gần đây
+            if (searchKeywords != null && searchKeywords.Any())
+            {
+                parts.Add($"Recent search keywords: {string.Join(", ", searchKeywords)}");
+            }
+
+            // Thêm thông tin từ các auction mà user hay xem
+            if (viewedItems != null && viewedItems.Any())
+            {
+                var viewed = viewedItems
+                    .Take(20)
+                    .Select(v =>
+                    {
+                        var itemParts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(v.Title))
+                            itemParts.Add(v.Title);
+                        if (!string.IsNullOrWhiteSpace(v.CategoryName))
+                            itemParts.Add($"({v.CategoryName})");
+                        return itemParts.Any() ? string.Join(" ", itemParts) : null;
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
+
+                if (viewed.Any())
+                {
+                    parts.Add($"Frequently viewed auctions: {string.Join(", ", viewed)}");
+                }
+            }
+
+            return string.Join("\n", parts);
         }
     }
 }
-
-

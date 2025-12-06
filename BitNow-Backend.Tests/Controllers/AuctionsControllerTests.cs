@@ -16,6 +16,9 @@ public class AuctionsControllerTests
     private readonly Mock<IBidService> _bidServiceMock;
     private readonly Mock<IHubContext<AuctionHub>> _hubContextMock;
     private readonly Mock<ILogger<AuctionsController>> _loggerMock;
+    private readonly Mock<IVectorSyncService> _vectorSyncServiceMock;
+    private readonly Mock<IItemService> _itemServiceMock;
+    private readonly Mock<IUserAuctionViewService> _userAuctionViewServiceMock;
     private readonly AuctionsController _controller;
 
     public AuctionsControllerTests()
@@ -24,11 +27,16 @@ public class AuctionsControllerTests
         _bidServiceMock = new Mock<IBidService>();
         _hubContextMock = new Mock<IHubContext<AuctionHub>>();
         _loggerMock = new Mock<ILogger<AuctionsController>>();
+        _vectorSyncServiceMock = new Mock<IVectorSyncService>();
+        _itemServiceMock = new Mock<IItemService>();
         _controller = new AuctionsController(
             _auctionServiceMock.Object,
             _bidServiceMock.Object,
             _hubContextMock.Object,
-            _loggerMock.Object);
+           _loggerMock.Object,
+           _vectorSyncServiceMock.Object,
+           _itemServiceMock.Object,
+           _userAuctionViewServiceMock.Object);
     }
 
     [Fact]
