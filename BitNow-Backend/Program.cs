@@ -40,6 +40,9 @@ builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IAuctionChatService, AuctionChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+// Dispute
+builder.Services.AddScoped<BitNow_Backend.DAL.IRepositories.IDisputeRepository, BitNow_Backend.DAL.Repositories.DisputeRepository>();
+builder.Services.AddScoped<IDisputeService, BitNow_Backend.BLL.Services.DisputeService>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
