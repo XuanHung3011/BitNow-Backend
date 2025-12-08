@@ -1,6 +1,7 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.Controllers;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -12,13 +13,15 @@ public class UsersControllerTests
 {
     private readonly Mock<IUserService> _userServiceMock;
     private readonly Mock<ILogger<UsersController>> _loggerMock;
+    private readonly Mock<IFileUploadService> _fileUploadServiceMock;
     private readonly UsersController _controller;
 
     public UsersControllerTests()
     {
         _userServiceMock = new Mock<IUserService>();
         _loggerMock = new Mock<ILogger<UsersController>>();
-        _controller = new UsersController(_userServiceMock.Object, _loggerMock.Object);
+        _fileUploadServiceMock = new Mock<IFileUploadService>();
+        _controller = new UsersController(_userServiceMock.Object, _loggerMock.Object, _fileUploadServiceMock.Object);
     }
 
     /// <summary>

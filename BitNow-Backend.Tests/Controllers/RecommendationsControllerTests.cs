@@ -11,14 +11,16 @@ namespace BitNow_Backend.Tests.Controllers;
 public class RecommendationsControllerTests
 {
     private readonly Mock<IRecommendationService> _recommendationServiceMock;
+    private readonly Mock<IVectorSyncService> _vectorSyncServiceMock;
     private readonly Mock<ILogger<RecommendationsController>> _loggerMock;
     private readonly RecommendationsController _controller;
 
     public RecommendationsControllerTests()
     {
         _recommendationServiceMock = new Mock<IRecommendationService>();
+        _vectorSyncServiceMock = new Mock<IVectorSyncService>();
         _loggerMock = new Mock<ILogger<RecommendationsController>>();
-        _controller = new RecommendationsController(_recommendationServiceMock.Object, _loggerMock.Object);
+        _controller = new RecommendationsController(_recommendationServiceMock.Object, _vectorSyncServiceMock.Object, _loggerMock.Object);
     }
 
     #region GetPersonalized
