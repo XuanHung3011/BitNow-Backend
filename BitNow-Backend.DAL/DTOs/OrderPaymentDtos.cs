@@ -42,6 +42,7 @@ public class PayOsPaymentLinkDto
     public string PaymentLink { get; set; } = null!;
     public string? PaymentLinkId { get; set; }
     public string? QrCode { get; set; }
+    public string? Status { get; set; } // PAID, PENDING, CANCELLED
 }
 
 public class CreatePaymentLinkRequestDto

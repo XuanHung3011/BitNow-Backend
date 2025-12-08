@@ -2,10 +2,12 @@ using BitNow_Backend.BLL.Payment;
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BitNow_Backend.Controllers;
 
@@ -253,15 +255,14 @@ public class PaymentController : ControllerBase
     }
 
     /// <summary>
-    /// Đồng bộ lại trạng thái thanh toán cho order (để fix trường hợp webhook chưa được gọi)
-    /// Nếu payment status là pending nhưng user đã thanh toán trên PayOS, có thể manually update
+    /// Đồng bộ lại trạng thái thanh toán cho order từ PayOS API (để fix trường hợp webhook chưa được gọi)
     /// </summary>
     [HttpPost("order/{orderId}/sync-payment")]
     public async Task<ActionResult<OrderDto>> SyncPaymentStatus(int orderId)
     {
         try
         {
-            _logger.LogInformation("Syncing payment status for order {OrderId}", orderId);
+            _logger.LogInformation("Syncing payment status for order {OrderId} from PayOS API", orderId);
 
             using var scope = HttpContext.RequestServices.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<BitNow_Backend.DAL.BidNowDbContext>();
@@ -276,9 +277,9 @@ public class PaymentController : ControllerBase
             }
 
             var payment = order.Payment;
-            if (payment == null)
+            if (payment == null || string.IsNullOrEmpty(payment.TransactionId))
             {
-                _logger.LogWarning("No payment record found for order {OrderId}", orderId);
+                _logger.LogWarning("No payment record or TransactionId found for order {OrderId}", orderId);
                 var orderDto = await _orderService.GetOrderByIdAsync(orderId);
                 return Ok(orderDto);
             }
@@ -286,12 +287,72 @@ public class PaymentController : ControllerBase
             _logger.LogInformation("Current payment status for order {OrderId}: {Status}, PaymentLinkId: {PaymentLinkId}", 
                 orderId, payment.PaymentStatus, payment.TransactionId);
             
-            // If payment status is pending, we could check with PayOS API
-            // For now, just refresh the order data from database
-            // The frontend can manually update if user confirms payment was completed
-            
-            var orderDtoResult = await _orderService.GetOrderByIdAsync(orderId);
-            return Ok(orderDtoResult);
+            // Gọi PayOS API để lấy payment status thực tế
+            var payOsPaymentInfo = await _payOsService.GetPaymentInformationAsync(payment.TransactionId);
+
+            if (payOsPaymentInfo == null)
+            {
+                _logger.LogWarning("Could not retrieve payment information from PayOS for order {OrderId}, PaymentLinkId {PaymentLinkId}",
+                    orderId, payment.TransactionId);
+                var orderDto = await _orderService.GetOrderByIdAsync(orderId);
+                return Ok(orderDto);
+            }
+
+            var payOsStatus = payOsPaymentInfo.Status?.Trim().ToUpperInvariant() ?? "";
+            _logger.LogInformation("PayOS status for order {OrderId}: {Status} (current DB status: {CurrentStatus})", 
+                orderId, payOsStatus, payment.PaymentStatus);
+
+            // STRICT CHECK: Chỉ cập nhật khi PayOS status chính xác là "PAID" (case-insensitive)
+            // Không cho phép cập nhật nếu status là CANCELLED, PENDING, hoặc bất kỳ giá trị nào khác
+            if (payOsStatus == "PAID" && payment.PaymentStatus != "paid_held" && order.OrderStatus == "awaiting_payment")
+            {
+                _logger.LogInformation("Updating order {OrderId} from PayOS sync: Status=PAID, updating to awaiting_shipment and paid_held", orderId);
+                
+                await _orderService.UpdateOrderStatusAsync(order.Id, "awaiting_shipment");
+                await UpdatePaymentStatusAsync(order.Id, "paid_held", null);
+                
+                // Notify seller
+                if (_notificationService != null && order.SellerId > 0)
+                {
+                    try
+                    {
+                        await _notificationService.CreateNotificationAsync(new CreateNotificationDto
+                        {
+                            UserId = order.SellerId,
+                            Message = $"Đơn hàng #{order.Id} đã được thanh toán thành công (đồng bộ từ PayOS). Vui lòng chuẩn bị và gửi hàng.",
+                            Type = "order_payment_received",
+                            Link = $"/seller?tab=orders"
+                        });
+                        _logger.LogInformation("Notification sent to seller {SellerId} for synced payment order {OrderId}", order.SellerId, order.Id);
+                    }
+                    catch (Exception notifEx)
+                    {
+                        _logger.LogError(notifEx, "Failed to send notification to seller for synced payment order {OrderId}", order.Id);
+                    }
+                }
+                
+                _logger.LogInformation("Order {OrderId} payment status synced to PAID from PayOS", orderId);
+            }
+            else if (payOsStatus == "CANCELLED" && payment.PaymentStatus != "pending")
+            {
+                _logger.LogInformation("Updating payment for order {OrderId} to pending (cancelled from PayOS)", orderId);
+                await UpdatePaymentStatusAsync(order.Id, "pending", null);
+            }
+            else if (payOsStatus == "PENDING" || payOsStatus == "")
+            {
+                // PayOS status vẫn là PENDING hoặc empty - không cập nhật gì cả
+                _logger.LogInformation("Order {OrderId} payment status on PayOS is {Status}, keeping current DB status: {DbStatus}", 
+                    orderId, payOsStatus, payment.PaymentStatus);
+            }
+            else
+            {
+                // Status khác (không phải PAID, CANCELLED, PENDING) - log warning và không cập nhật
+                _logger.LogWarning("Order {OrderId} has unexpected PayOS status: {Status}, not updating. Current DB status: {DbStatus}", 
+                    orderId, payOsStatus, payment.PaymentStatus);
+            }
+
+            var updatedOrder = await _orderService.GetOrderByIdAsync(orderId);
+            return Ok(updatedOrder);
         }
         catch (Exception ex)
         {
@@ -700,6 +761,47 @@ public class PaymentController : ControllerBase
             if (order == null)
             {
                 return NotFound(new { message = "Order not found" });
+            }
+
+            // Get buyer ID from header (custom authentication)
+            var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+            if (string.IsNullOrEmpty(userIdHeader) || !int.TryParse(userIdHeader, out var buyerId))
+            {
+                // Fallback: try to get from User claims if available
+                var buyerIdClaim = User.FindFirst("userId")?.Value;
+                if (string.IsNullOrEmpty(buyerIdClaim) || !int.TryParse(buyerIdClaim, out buyerId))
+                {
+                    return Unauthorized(new { message = "User not authenticated. Please provide X-User-Id header." });
+                }
+            }
+
+            if (order.BuyerId != buyerId)
+            {
+                return Forbid();
+            }
+
+            // Create dispute
+            var disputeService = HttpContext.RequestServices.GetRequiredService<BitNow_Backend.BLL.IServices.IDisputeService>();
+            try
+            {
+                var createDisputeDto = new CreateDisputeDto
+                {
+                    OrderId = orderId,
+                    Reason = dto.IssueDescription,
+                    Description = dto.IssueDescription
+                };
+                await disputeService.CreateDisputeAsync(createDisputeDto, buyerId);
+                _logger.LogInformation("Dispute created successfully for order {OrderId}", orderId);
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Dispute already exists - this is OK, continue
+                _logger.LogInformation("Dispute already exists for order {OrderId}: {Message}", orderId, ex.Message);
+            }
+            catch (Exception disputeEx)
+            {
+                _logger.LogError(disputeEx, "Failed to create dispute for order {OrderId}", orderId);
+                // Continue even if dispute creation fails - order status will still be updated
             }
 
             // Update order status to dispute
