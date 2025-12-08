@@ -11,14 +11,16 @@ namespace BitNow_Backend.Tests.Controllers;
 public class HomeControllerTests
 {
     private readonly Mock<IItemService> _itemServiceMock;
+    private readonly Mock<ISearchKeywordService> _searchKeywordServiceMock;
     private readonly Mock<ILogger<HomeController>> _loggerMock;
     private readonly HomeController _controller;
 
     public HomeControllerTests()
     {
         _itemServiceMock = new Mock<IItemService>();
+        _searchKeywordServiceMock = new Mock<ISearchKeywordService>();
         _loggerMock = new Mock<ILogger<HomeController>>();
-        _controller = new HomeController(_itemServiceMock.Object, _loggerMock.Object);
+        _controller = new HomeController(_itemServiceMock.Object, _searchKeywordServiceMock.Object, _loggerMock.Object);
     }
 
     #region GetAllItems
