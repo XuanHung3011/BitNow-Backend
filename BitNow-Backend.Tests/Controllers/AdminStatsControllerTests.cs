@@ -23,6 +23,15 @@ public class AdminStatsControllerTests
 
     #region GetAdminStats
 
+    /// <summary>
+    /// Test ID: ADMIN-STATS-01
+    /// Precondition: AdminStatsService hoạt động bình thường, có dữ liệu thống kê trong hệ thống
+    /// Input: Không có tham số đầu vào
+    /// Condition: Lấy tổng quan thống kê admin (users, auctions, items, disputes, revenue)
+    /// Confirmation: HTTP 200 OK, trả về AdminStatsDto với TotalUsers, ActiveAuctions, RevenueThisMonth, etc.
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy admin stats thành công
+    /// </summary>
     [Fact]
     public async Task GetAdminStats_WithValidData_ReturnsOk()
     {
@@ -53,6 +62,15 @@ public class AdminStatsControllerTests
         _adminStatsServiceMock.Verify(x => x.GetAdminStatsAsync(), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-STATS-02
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: Không có tham số đầu vào
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetAdminStats_WithException_ReturnsInternalServerError()
     {
@@ -73,6 +91,15 @@ public class AdminStatsControllerTests
 
     #region GetAdminStatsDetail
 
+    /// <summary>
+    /// Test ID: ADMIN-STATS-03
+    /// Precondition: AdminStatsService hoạt động bình thường, type hợp lệ
+    /// Input: Type hợp lệ ("users", "auctions", "revenue", "disputes")
+    /// Condition: Lấy chi tiết thống kê admin theo type cụ thể với chart data và summary
+    /// Confirmation: HTTP 200 OK, trả về AdminStatsDetailDto với ChartData và Summary
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy admin stats detail thành công
+    /// </summary>
     [Fact]
     public async Task GetAdminStatsDetail_WithValidType_ReturnsOk()
     {
@@ -105,6 +132,15 @@ public class AdminStatsControllerTests
         _adminStatsServiceMock.Verify(x => x.GetAdminStatsDetailAsync(type), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-STATS-04
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: Type hợp lệ ("revenue")
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetAdminStatsDetail_WithException_ReturnsInternalServerError()
     {
