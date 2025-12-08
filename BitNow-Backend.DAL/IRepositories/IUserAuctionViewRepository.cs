@@ -14,7 +14,7 @@ namespace BitNow_Backend.DAL.IRepositories
         Task<List<UserAuctionView>> GetRecentByUserAsync(int userId, int take = 20);
 
 
-
+        Task<int> DeleteOldViewsAsync(DateTime olderThan);
         Task AddAsync(UserAuctionView view);
     }
 }

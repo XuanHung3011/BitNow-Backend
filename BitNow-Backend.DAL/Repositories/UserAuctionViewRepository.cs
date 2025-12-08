@@ -40,6 +40,14 @@ namespace BitNow_Backend.DAL.Repositories
             await _context.UserAuctionViews.AddAsync(view);
             await _context.SaveChangesAsync();
         }
+        public async Task<int> DeleteOldViewsAsync(DateTime olderThan)
+        {
+            var rowsDeleted = await _context.UserAuctionViews
+                .Where(v => v.ViewedAt < olderThan)
+                .ExecuteDeleteAsync(); 
+
+            return rowsDeleted;
+        }
     }
 }
 

@@ -11,6 +11,7 @@ namespace BitNow_Backend.BLL.BackgroundServices
         private readonly ILogger<CleanupBackgroundService> _logger;
 
         private static readonly TimeSpan KEYWORD_RETENTION = TimeSpan.FromDays(180); // 6 tháng
+        private static readonly TimeSpan AUCTION_VIEW_RETENTION = TimeSpan.FromDays(90);
         private static readonly TimeSpan STARTUP_DELAY = TimeSpan.FromMinutes(1);
         private static readonly int CLEANUP_HOUR = 1; // 1h sáng
         private static readonly TimeZoneInfo VN_TIMEZONE = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
@@ -55,7 +56,7 @@ namespace BitNow_Backend.BLL.BackgroundServices
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Fatal error in CleanupBackgroundService");
+                _logger.LogError(ex, " Fatal error in CleanupBackgroundService");
                 throw;
             }
         }
@@ -87,11 +88,13 @@ namespace BitNow_Backend.BLL.BackgroundServices
             _logger.LogInformation("===  Starting cleanup tasks at {VNTime} (VN) ===", vnTime.ToString("yyyy-MM-dd HH:mm:ss"));
             var startTime = DateTime.UtcNow;
 
-            // Chạy song song 2 tasks
+            
             var auctionTask = CleanupExpiredAuctionsAsync(stoppingToken);
             var keywordTask = CleanupOldSearchKeywordsAsync(stoppingToken);
+            var viewTask = CleanupOldAuctionViewsAsync(stoppingToken);
 
-            await Task.WhenAll(auctionTask, keywordTask);
+            await Task.WhenAll(auctionTask, keywordTask, viewTask);
+
 
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("===  Cleanup completed in {Duration:F2}s ===", duration.TotalSeconds);
@@ -140,6 +143,30 @@ namespace BitNow_Backend.BLL.BackgroundServices
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Keyword]  Failed: {Message}", ex.Message);
+            }
+        }
+        private async Task CleanupOldAuctionViewsAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                _logger.LogInformation("[View]  Scanning for auction views older than {Days} days...",
+                    AUCTION_VIEW_RETENTION.TotalDays);
+                var startTime = DateTime.UtcNow;
+
+                using var scope = _serviceProvider.CreateScope();
+                var viewService = scope.ServiceProvider.GetRequiredService<IUserAuctionViewService>();
+
+                var deletedCount = await viewService.DeleteOldViewsAsync(
+                    AUCTION_VIEW_RETENTION,
+                    stoppingToken);
+
+                var duration = DateTime.UtcNow - startTime;
+                _logger.LogInformation("[View]  Deleted {Count} old auction views in {Duration:F2}s",
+                    deletedCount, duration.TotalSeconds);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[View]  Failed: {Message}", ex.Message);
             }
         }
     }
