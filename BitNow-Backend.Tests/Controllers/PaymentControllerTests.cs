@@ -26,6 +26,7 @@ public class PaymentControllerTests
     private readonly Mock<BidNowDbContext> _dbContextMock;
     private readonly PaymentController _controller;
     private readonly Mock<HttpContext> _httpContextMock;
+    private readonly Mock<IServiceProvider> _serviceProviderMock;
 
     public PaymentControllerTests()
     {
@@ -38,8 +39,8 @@ public class PaymentControllerTests
         _httpContextMock = new Mock<HttpContext>();
 
         // Setup service provider
-        var serviceProviderMock = new Mock<IServiceProvider>();
-        serviceProviderMock.Setup(x => x.GetService(typeof(INotificationService)))
+        _serviceProviderMock = new Mock<IServiceProvider>();
+        _serviceProviderMock.Setup(x => x.GetService(typeof(INotificationService)))
             .Returns(_notificationServiceMock.Object);
 
         // Setup service scope for DbContext
@@ -53,18 +54,18 @@ public class PaymentControllerTests
         serviceScopeMock.Setup(x => x.ServiceProvider).Returns(scopeServiceProviderMock.Object);
         var serviceScopeFactoryMock = new Mock<IServiceScopeFactory>();
         serviceScopeFactoryMock.Setup(x => x.CreateScope()).Returns(serviceScopeMock.Object);
-        serviceProviderMock.Setup(x => x.GetService(typeof(IServiceScopeFactory)))
+        _serviceProviderMock.Setup(x => x.GetService(typeof(IServiceScopeFactory)))
             .Returns(serviceScopeFactoryMock.Object);
 
         // Setup HttpContext
-        _httpContextMock.Setup(x => x.RequestServices).Returns(serviceProviderMock.Object);
+        _httpContextMock.Setup(x => x.RequestServices).Returns(_serviceProviderMock.Object);
 
         _controller = new PaymentController(
             _payOsServiceMock.Object,
             _orderServiceMock.Object,
             _loggerMock.Object,
             _configMock.Object,
-            serviceProviderMock.Object);
+            _serviceProviderMock.Object);
 
         _controller.ControllerContext = new ControllerContext
         {
@@ -652,11 +653,13 @@ public class PaymentControllerTests
     public async Task ReportOrderIssue_WithValidData_ReturnsOk()
     {
         // Arrange
+        var buyerId = 1;
         var order = new OrderDto
         {
             Id = 1,
             OrderStatus = "shipped",
-            SellerId = 1
+            SellerId = 2,
+            BuyerId = buyerId
         };
 
         var issueDto = new ReportIssueDto
@@ -664,9 +667,26 @@ public class PaymentControllerTests
             IssueDescription = "Hàng bị hỏng"
         };
 
+        // Setup X-User-Id header
+        var headersMock = new Mock<IHeaderDictionary>();
+        var headerValues = new Microsoft.Extensions.Primitives.StringValues(buyerId.ToString());
+        headersMock.Setup(x => x["X-User-Id"]).Returns(headerValues);
+        headersMock.Setup(x => x.GetEnumerator()).Returns(new List<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>().GetEnumerator());
+        var requestMock = new Mock<HttpRequest>();
+        requestMock.Setup(x => x.Headers).Returns(headersMock.Object);
+        _httpContextMock.Setup(x => x.Request).Returns(requestMock.Object);
+
+        // Setup IDisputeService
+        var disputeServiceMock = new Mock<IDisputeService>();
+        disputeServiceMock.Setup(x => x.CreateDisputeAsync(It.IsAny<CreateDisputeDto>(), buyerId))
+            .ReturnsAsync(new DisputeDto { Id = 1, OrderId = 1 });
+        
+        _serviceProviderMock.Setup(x => x.GetService(typeof(IDisputeService)))
+            .Returns(disputeServiceMock.Object);
+
         _orderServiceMock.SetupSequence(x => x.GetOrderByIdAsync(1))
             .ReturnsAsync(order)
-            .ReturnsAsync(new OrderDto { Id = 1, OrderStatus = "dispute" });
+            .ReturnsAsync(new OrderDto { Id = 1, OrderStatus = "dispute", BuyerId = buyerId });
 
         _orderServiceMock.Setup(x => x.UpdateOrderStatusAsync(1, "dispute"))
             .ReturnsAsync(true);
