@@ -693,6 +693,12 @@ namespace BitNow_Backend.Controllers
                     return NotFound(new { message = $"Item with ID {id} not found" });
                 }
 
+                // Nếu xóa item pending, gửi signal để admin refresh danh sách
+                if (statusLower == "pending")
+                {
+                    await NotifyPendingAndDashboardAsync(id, "deleted");
+                }
+
                 return Ok(new { message = "Đã xóa sản phẩm thành công" });
             }
             catch (Exception ex)

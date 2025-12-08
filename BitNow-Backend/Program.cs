@@ -11,6 +11,8 @@ using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.FileProviders;
 using BitNow_Backend.Services;
 using BitNow_Backend.RealTime;
+using BitNow_Backend.BLL.BackgroundServices;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 // DAL: EF DbContext registration
@@ -38,9 +40,18 @@ builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IAuctionChatService, AuctionChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+// Dispute
+builder.Services.AddScoped<BitNow_Backend.DAL.IRepositories.IDisputeRepository, BitNow_Backend.DAL.Repositories.DisputeRepository>();
+builder.Services.AddScoped<IDisputeService, BitNow_Backend.BLL.Services.DisputeService>();
 
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
+// Search keywords
+builder.Services.AddScoped<ISearchKeywordRepository, SearchKeywordRepository>();
+builder.Services.AddScoped<ISearchKeywordService, SearchKeywordService>();
+// User auction views
+builder.Services.AddScoped<IUserAuctionViewRepository, UserAuctionViewRepository>();
+builder.Services.AddScoped<IUserAuctionViewService, UserAuctionViewService>();
 
 // Ratings
 builder.Services.AddScoped<IRatingRepository, RatingRepository>();
@@ -65,14 +76,26 @@ builder.Services.AddScoped<INotificationHub, NotificationHubService>();
 // Platform Analytics
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
 
+
+// Register Background Service
+builder.Services.AddHostedService<CleanupBackgroundService>();
+
 builder.Services.AddHostedService<AuctionFinalizationBackgroundService>();
 
 
-// AI Recommendations
+
+// AI Recommendations - Vector-based
+Console.OutputEncoding = Encoding.UTF8;
+
+builder.Services.AddScoped<IPineconeService, PineconeService>();
+builder.Services.AddScoped<IVectorSyncService, VectorSyncService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 
-// HttpClient (dùng cho OpenAI)
-builder.Services.AddHttpClient("OpenAI");
+// HttpClient for LM Studio (local embedding service)
+builder.Services.AddHttpClient("LMStudio");
+
+// HttpClient for Pinecone
+builder.Services.AddHttpClient("Pinecone");
 
 // Payment Services
 builder.Services.AddScoped<IPayOsService, PayOsService>();

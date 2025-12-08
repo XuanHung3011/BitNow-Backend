@@ -3,6 +3,8 @@ using BitNow_Backend.DAL.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using BitNow_Backend.RealTime;
+using BitNow_Backend.BLL.Services;
+using BitNow_Backend.BLL.IServices;
 
 namespace BitNow_Backend.Controllers
 {
@@ -14,13 +16,27 @@ namespace BitNow_Backend.Controllers
 		private readonly IBidService _bidService;
 		private readonly IHubContext<AuctionHub> _hubContext;
         private readonly ILogger<AuctionsController> _logger;
+        private readonly IVectorSyncService _vectorSyncService;  
+        private readonly IItemService _itemService;
+        private readonly IUserAuctionViewService _userAuctionViewService;
 
-        public AuctionsController(IAuctionService auctionService, IBidService bidService, IHubContext<AuctionHub> hubContext, ILogger<AuctionsController> logger)
+
+        public AuctionsController(
+            IAuctionService auctionService,
+            IBidService bidService,
+            IHubContext<AuctionHub> hubContext,
+            ILogger<AuctionsController> logger,
+            IVectorSyncService vectorSyncService,
+            IItemService itemService,
+            IUserAuctionViewService userAuctionViewService)
         {
             _auctionService = auctionService;
             _bidService = bidService;
             _hubContext = hubContext;
             _logger = logger;
+            _vectorSyncService = vectorSyncService;  
+            _itemService = itemService;
+            _userAuctionViewService = userAuctionViewService;
         }
 
         /// <summary>
@@ -47,6 +63,22 @@ namespace BitNow_Backend.Controllers
                 }
 
                 _logger.LogInformation("Auction created successfully with ID: {AuctionId}", result.Id);
+
+                //  THÊM: Sync auction mới vào Pinecone
+                try
+                {
+                    var itemDto = await _itemService.GetByIdAsync(dto.ItemId);
+                    if (itemDto != null)
+                    {
+                        await _vectorSyncService.SyncAuctionAsync(itemDto);
+                        _logger.LogInformation("Successfully synced auction {AuctionId} to Pinecone", result.Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log lỗi nhưng không làm fail request tạo auction
+                    _logger.LogWarning(ex, "Failed to sync auction {AuctionId} to Pinecone, but auction was created successfully", result.Id);
+                }
 
                 var payload = new
                 {
@@ -95,11 +127,19 @@ namespace BitNow_Backend.Controllers
         }
 
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<AuctionDetailDto>> Get(int id)
+        public async Task<ActionResult<AuctionDetailDto>> Get(
+            int id,
+            [FromQuery] int? userId = null)
 		{
 			var dto = await _auctionService.GetDetailAsync(id);
 			if (dto == null) return NotFound();
-			return Ok(dto);
+
+            if (userId.HasValue && userId.Value > 0)
+            {
+                await _userAuctionViewService.LogViewAsync(userId.Value, id);
+            }
+
+            return Ok(dto);
 		}
 
 		[HttpPost("{id}/bid")]

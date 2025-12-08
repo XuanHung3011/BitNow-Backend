@@ -207,4 +207,52 @@ public class PayOsService : IPayOsService
             };
         }
     }
+
+    /// <summary>
+    /// Lấy thông tin payment từ PayOS bằng PaymentLinkId
+    /// </summary>
+    public async Task<PayOsPaymentLinkDto?> GetPaymentInformationAsync(string paymentLinkId)
+    {
+        try
+        {
+            _logger.LogInformation("Getting payment information for PaymentLinkId {PaymentLinkId} from PayOS", paymentLinkId);
+
+            if (string.IsNullOrEmpty(paymentLinkId))
+            {
+                _logger.LogWarning("PaymentLinkId is null or empty");
+                return null;
+            }
+
+            // PayOS SDK có thể lấy payment info bằng PaymentLinkId
+            // PaymentRequests.GetAsync nhận PaymentLinkId (string)
+            var paymentInfo = await _payOSClient.PaymentRequests.GetAsync(paymentLinkId);
+
+            if (paymentInfo == null)
+            {
+                _logger.LogWarning("Payment information not found for PaymentLinkId {PaymentLinkId}", paymentLinkId);
+                return null;
+            }
+
+            // Convert Status enum to string
+            var statusString = paymentInfo.Status.ToString();
+
+            _logger.LogInformation("Payment information retrieved for PaymentLinkId {PaymentLinkId}: Status={Status}, OrderCode={OrderCode}",
+                paymentLinkId, statusString, paymentInfo.OrderCode);
+
+            // PaymentLink từ GetAsync chỉ cần Status, không cần CheckoutUrl và QrCode
+            // Vì chúng ta chỉ cần status để sync payment
+            return new PayOsPaymentLinkDto
+            {
+                PaymentLinkId = paymentLinkId,
+                PaymentLink = "", // Not needed for sync
+                QrCode = null, // Not needed for sync
+                Status = statusString // Convert enum to string: PAID, PENDING, CANCELLED
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting payment information for PaymentLinkId {PaymentLinkId}: {Message}", paymentLinkId, ex.Message);
+            return null;
+        }
+    }
 }
