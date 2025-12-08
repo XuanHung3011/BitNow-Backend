@@ -18,6 +18,15 @@ public class CategoriesControllerTests
         _controller = new CategoriesController(_categoryServiceMock.Object);
     }
 
+    /// <summary>
+    /// Test ID: CAT-01
+    /// Precondition: CategoryService hoạt động bình thường, có categories trong hệ thống
+    /// Input: Không có tham số đầu vào
+    /// Condition: Lấy tất cả categories từ hệ thống
+    /// Confirmation: HTTP 200 OK, trả về danh sách CategoryDtos
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy tất cả categories thành công
+    /// </summary>
     [Fact]
     public async Task GetAllCategories_ReturnsOk()
     {
@@ -40,6 +49,15 @@ public class CategoriesControllerTests
         okResult!.Value.Should().BeEquivalentTo(categories);
     }
 
+    /// <summary>
+    /// Test ID: CAT-02
+    /// Precondition: Category tồn tại trong hệ thống, CategoryService hoạt động bình thường
+    /// Input: CategoryId hợp lệ (1)
+    /// Condition: Lấy category theo ID hợp lệ
+    /// Confirmation: HTTP 200 OK, trả về CategoryDtos với Id=1, Name="Electronics"
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy category theo ID thành công
+    /// </summary>
     [Fact]
     public async Task GetCategory_WithValidId_ReturnsOk()
     {
@@ -63,6 +81,15 @@ public class CategoriesControllerTests
         okResult!.Value.Should().BeEquivalentTo(category);
     }
 
+    /// <summary>
+    /// Test ID: CAT-03
+    /// Precondition: Category không tồn tại trong hệ thống
+    /// Input: CategoryId không tồn tại (999)
+    /// Condition: Lấy category với ID không tồn tại
+    /// Confirmation: HTTP 404 NotFound
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp category không tồn tại
+    /// </summary>
     [Fact]
     public async Task GetCategory_WithInvalidId_ReturnsNotFound()
     {
@@ -77,6 +104,15 @@ public class CategoriesControllerTests
         result.Result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-04
+    /// Precondition: Category tồn tại trong hệ thống với slug hợp lệ, CategoryService hoạt động bình thường
+    /// Input: Slug hợp lệ ("electronics")
+    /// Condition: Lấy category theo slug hợp lệ
+    /// Confirmation: HTTP 200 OK, trả về CategoryDtos với Slug="electronics"
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy category theo slug thành công
+    /// </summary>
     [Fact]
     public async Task GetCategoryBySlug_WithValidSlug_ReturnsOk()
     {
@@ -100,6 +136,15 @@ public class CategoriesControllerTests
         okResult!.Value.Should().BeEquivalentTo(category);
     }
 
+    /// <summary>
+    /// Test ID: CAT-05
+    /// Precondition: Slug chưa tồn tại trong hệ thống, CategoryService hoạt động bình thường
+    /// Input: CreateCategoryDtos hợp lệ (Name="Electronics", Slug="electronics", Description="Electronic items")
+    /// Condition: Tạo category mới với thông tin hợp lệ và slug chưa tồn tại
+    /// Confirmation: HTTP 201 Created, trả về CategoryDtos với Id=1
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng tạo category thành công
+    /// </summary>
     [Fact]
     public async Task CreateCategory_WithValidData_ReturnsCreated()
     {
@@ -131,6 +176,15 @@ public class CategoriesControllerTests
         createdResult!.Value.Should().BeEquivalentTo(createdCategory);
     }
 
+    /// <summary>
+    /// Test ID: CAT-06
+    /// Precondition: Slug đã tồn tại trong hệ thống
+    /// Input: CreateCategoryDtos với Slug đã tồn tại ("electronics")
+    /// Condition: Tạo category với slug trùng lặp
+    /// Confirmation: HTTP 409 Conflict, thông báo "Slug already exists"
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp slug trùng lặp
+    /// </summary>
     [Fact]
     public async Task CreateCategory_WithDuplicateSlug_ReturnsConflict()
     {
@@ -151,6 +205,15 @@ public class CategoriesControllerTests
         result.Result.Should().BeOfType<ConflictObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-07
+    /// Precondition: Category tồn tại trong hệ thống, CategoryService hoạt động bình thường
+    /// Input: CategoryId hợp lệ (1), UpdateCategoryDtos hợp lệ
+    /// Condition: Cập nhật category với thông tin hợp lệ
+    /// Confirmation: HTTP 200 OK, trả về CategoryDtos đã được cập nhật
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng cập nhật category thành công
+    /// </summary>
     [Fact]
     public async Task UpdateCategory_WithValidData_ReturnsOk()
     {
@@ -182,6 +245,15 @@ public class CategoriesControllerTests
         okResult!.Value.Should().BeEquivalentTo(updatedCategory);
     }
 
+    /// <summary>
+    /// Test ID: CAT-08
+    /// Precondition: Category không tồn tại trong hệ thống
+    /// Input: CategoryId không tồn tại (999), UpdateCategoryDtos hợp lệ
+    /// Condition: Cập nhật category với ID không tồn tại
+    /// Confirmation: HTTP 404 NotFound
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp category không tồn tại khi cập nhật
+    /// </summary>
     [Fact]
     public async Task UpdateCategory_WithInvalidId_ReturnsNotFound()
     {
@@ -202,6 +274,15 @@ public class CategoriesControllerTests
         result.Result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-09
+    /// Precondition: Category tồn tại và không được sử dụng bởi items/auctions khác
+    /// Input: CategoryId hợp lệ (1)
+    /// Condition: Xóa category không được sử dụng
+    /// Confirmation: HTTP 204 NoContent
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng xóa category thành công
+    /// </summary>
     [Fact]
     public async Task DeleteCategory_WithValidId_ReturnsNoContent()
     {
@@ -216,6 +297,15 @@ public class CategoriesControllerTests
         result.Should().BeOfType<NoContentResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-10
+    /// Precondition: Category không tồn tại trong hệ thống
+    /// Input: CategoryId không tồn tại (999)
+    /// Condition: Xóa category không tồn tại
+    /// Confirmation: HTTP 404 NotFound
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp category không tồn tại khi xóa
+    /// </summary>
     [Fact]
     public async Task DeleteCategory_WithInvalidId_ReturnsNotFound()
     {
@@ -230,6 +320,15 @@ public class CategoriesControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-11
+    /// Precondition: Category đang được sử dụng bởi items/auctions
+    /// Input: CategoryId hợp lệ (1) nhưng đang được sử dụng
+    /// Condition: Xóa category đang được sử dụng
+    /// Confirmation: HTTP 409 Conflict, thông báo "Category is in use"
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp category đang được sử dụng
+    /// </summary>
     [Fact]
     public async Task DeleteCategory_WithCategoryInUse_ReturnsConflict()
     {
@@ -244,6 +343,15 @@ public class CategoriesControllerTests
         result.Should().BeOfType<ConflictObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-12
+    /// Precondition: CategoryService hoạt động bình thường, có categories trong hệ thống
+    /// Input: CategoryFilterDto với Page=1, PageSize=10 (hoặc không có tham số)
+    /// Condition: Lấy danh sách categories có phân trang
+    /// Confirmation: HTTP 200 OK, trả về PaginatedResult với Data, TotalCount, Page, PageSize
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy categories có phân trang thành công
+    /// </summary>
     [Fact]
     public async Task GetCategoriesPaged_ReturnsOk()
     {
@@ -275,6 +383,15 @@ public class CategoriesControllerTests
         result.Result.Should().BeOfType<OkObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: CAT-13
+    /// Precondition: CategoryService hoạt động bình thường
+    /// Input: Slug hợp lệ ("electronics")
+    /// Condition: Kiểm tra slug đã tồn tại trong hệ thống
+    /// Confirmation: HTTP 200 OK, trả về true nếu slug tồn tại
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng kiểm tra slug tồn tại thành công
+    /// </summary>
     [Fact]
     public async Task CheckSlugExists_ReturnsOk()
     {
@@ -291,6 +408,15 @@ public class CategoriesControllerTests
         okResult!.Value.Should().Be(true);
     }
 
+    /// <summary>
+    /// Test ID: CAT-14
+    /// Precondition: Category tồn tại trong hệ thống, CategoryService hoạt động bình thường
+    /// Input: CategoryId hợp lệ (1)
+    /// Condition: Kiểm tra category có đang được sử dụng không
+    /// Confirmation: HTTP 200 OK, trả về true nếu category đang được sử dụng
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng kiểm tra category đang được sử dụng thành công
+    /// </summary>
     [Fact]
     public async Task IsCategoryInUse_WithValidId_ReturnsOk()
     {
