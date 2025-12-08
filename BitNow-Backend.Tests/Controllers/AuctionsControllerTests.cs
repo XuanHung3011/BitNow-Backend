@@ -29,14 +29,15 @@ public class AuctionsControllerTests
         _loggerMock = new Mock<ILogger<AuctionsController>>();
         _vectorSyncServiceMock = new Mock<IVectorSyncService>();
         _itemServiceMock = new Mock<IItemService>();
+        _userAuctionViewServiceMock = new Mock<IUserAuctionViewService>();
         _controller = new AuctionsController(
             _auctionServiceMock.Object,
             _bidServiceMock.Object,
             _hubContextMock.Object,
-           _loggerMock.Object,
-           _vectorSyncServiceMock.Object,
-           _itemServiceMock.Object,
-           _userAuctionViewServiceMock.Object);
+            _loggerMock.Object,
+            _vectorSyncServiceMock.Object,
+            _itemServiceMock.Object,
+            _userAuctionViewServiceMock.Object);
     }
 
     /// <summary>
