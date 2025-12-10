@@ -86,6 +86,32 @@ namespace BitNow_Backend.BLL.Services
 
             return ids;
         }
-    }
+        public async Task<int> DeleteOldViewsAsync(TimeSpan retention, CancellationToken cancellationToken = default)
+        {
+            if (retention <= TimeSpan.Zero)
+            {
+                _logger.LogWarning("Invalid retention period: {Retention}. Skipping cleanup.", retention);
+                return 0;
+            }
+
+            try
+            {
+                var cutoffDate = DateTime.UtcNow - retention;
+                var deletedCount = await _repository.DeleteOldViewsAsync(cutoffDate);
+
+                _logger.LogInformation(
+                    "Deleted {Count} auction view records older than {CutoffDate:yyyy-MM-dd}",
+                    deletedCount, cutoffDate);
+
+                return deletedCount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete old auction views");
+                throw;
+            }
+        }
+    
+}
 }
 
