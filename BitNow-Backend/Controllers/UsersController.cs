@@ -1,6 +1,9 @@
 using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.Helpers;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using BitNow_Backend.Services;
 using System.IO;
 
@@ -13,12 +16,30 @@ public class UsersController : ControllerBase
     private readonly IUserService _userService;
     private readonly ILogger<UsersController> _logger;
     private readonly IFileUploadService _fileUploadService;
+    private readonly BidNowDbContext _dbContext;
 
-    public UsersController(IUserService userService, ILogger<UsersController> logger, IFileUploadService fileUploadService)
+    public UsersController(IUserService userService, ILogger<UsersController> logger, IFileUploadService fileUploadService, BidNowDbContext dbContext)
     {
         _userService = userService;
         _logger = logger;
         _fileUploadService = fileUploadService;
+        _dbContext = dbContext;
+    }
+
+    private int? GetCurrentUserId()
+    {
+        // Try to get from header first (custom authentication)
+        var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(userIdHeader) && int.TryParse(userIdHeader, out var userId))
+        {
+            return userId;
+        }
+
+        // Fallback: try to get from User claims if available
+        var userIdClaim = User.FindFirst("userId")?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out userId))
+            return null;
+        return userId;
     }
 
     /// <summary>
@@ -109,13 +130,21 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Update user
+    /// Update user (Admin/Support only)
     /// </summary>
     [HttpPut("{id}")]
     public async Task<ActionResult<UserResponseDto>> UpdateUser(int id, [FromBody] UserUpdateDto userDto)
     {
         try
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Check if user is admin or support
+            if (!await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "support"))
+                return Forbid();
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -133,13 +162,73 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Change user password
+    /// Reset user password (Admin/Support only - no current password required)
+    /// </summary>
+    [HttpPut("{id}/reset-password")]
+    public async Task<ActionResult> ResetPassword(int id, [FromBody] ResetPasswordDto resetPasswordDto)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Check if user is admin or support
+            if (!await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "support"))
+                return Forbid();
+
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // Validate new password length
+            if (resetPasswordDto.NewPassword.Length < 6)
+                return BadRequest(new { message = "Mật khẩu mới phải có ít nhất 6 ký tự" });
+
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = "Không tìm thấy người dùng" });
+
+            // Use ChangePasswordAsync with empty current password (will be handled by service)
+            var result = await _userService.ChangePasswordAsync(id, new ChangePasswordDto
+            {
+                CurrentPassword = "", // Not required for admin/support reset
+                NewPassword = resetPasswordDto.NewPassword
+            });
+
+            if (!result)
+                return BadRequest(new { message = "Không thể đặt lại mật khẩu" });
+
+            return Ok(new { message = "Đặt lại mật khẩu thành công" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting password for user {UserId}", id);
+            return StatusCode(500, new { message = "Lỗi server, vui lòng thử lại sau" });
+        }
+    }
+
+    public class ResetPasswordDto
+    {
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Change user password (Admin/Support only, or user changing their own password)
     /// </summary>
     [HttpPut("{id}/change-password")]
     public async Task<ActionResult> ChangePassword(int id, [FromBody] ChangePasswordDto changePasswordDto)
     {
         try
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Allow if user is changing their own password, or if user is admin/support
+            var isAdminOrSupport = await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "support");
+            if (currentUserId != id && !isAdminOrSupport)
+                return Forbid();
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -151,13 +240,28 @@ public class UsersController : ControllerBase
             if (user == null)
                 return NotFound(new { message = "Không tìm thấy người dùng" });
 
-            // Verify current password
-            if (!await _userService.ValidateCredentialsAsync(user.Email, changePasswordDto.CurrentPassword))
-                return Unauthorized(new { message = "Mật khẩu hiện tại không đúng" });
+            // If admin/support is changing password for another user, skip current password verification
+            if (isAdminOrSupport && currentUserId != id)
+            {
+                // Admin/Support can change password without current password
+                var result = await _userService.ChangePasswordAsync(id, new ChangePasswordDto
+                {
+                    CurrentPassword = changePasswordDto.CurrentPassword, // May be empty for admin/support
+                    NewPassword = changePasswordDto.NewPassword
+                });
+                if (!result)
+                    return BadRequest(new { message = "Không thể đổi mật khẩu" });
+            }
+            else
+            {
+                // User changing their own password - verify current password
+                if (!await _userService.ValidateCredentialsAsync(user.Email, changePasswordDto.CurrentPassword))
+                    return Unauthorized(new { message = "Mật khẩu hiện tại không đúng" });
 
-            var result = await _userService.ChangePasswordAsync(id, changePasswordDto);
-            if (!result)
-                return BadRequest(new { message = "Không thể đổi mật khẩu" });
+                var result = await _userService.ChangePasswordAsync(id, changePasswordDto);
+                if (!result)
+                    return BadRequest(new { message = "Không thể đổi mật khẩu" });
+            }
 
             return Ok(new { message = "Đổi mật khẩu thành công" });
         }
@@ -169,13 +273,33 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Activate user
+    /// Activate user (Admin/Staff only, can only activate buyer/seller)
     /// </summary>
     [HttpPut("{id}/activate")]
     public async Task<ActionResult> ActivateUser(int id)
     {
         try
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Check if user is admin or staff
+            if (!await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "staff"))
+                return Forbid();
+
+            // Check if target user is buyer or seller (not admin/staff/support)
+            var targetUser = await _dbContext.Users
+                .Include(u => u.UserRoles)
+                .FirstOrDefaultAsync(u => u.Id == id);
+            
+            if (targetUser == null)
+                return NotFound($"User with ID {id} not found");
+
+            var targetRoles = targetUser.UserRoles.Select(ur => ur.Role.ToLower()).ToList();
+            if (targetRoles.Contains("admin") || targetRoles.Contains("staff") || targetRoles.Contains("support"))
+                return Forbid("Cannot activate admin, staff, or support users");
+
             var result = await _userService.ActivateUserAsync(id);
             if (!result)
                 return NotFound($"User with ID {id} not found");
@@ -190,13 +314,33 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Deactivate user
+    /// Deactivate user (Admin/Staff only, can only deactivate buyer/seller)
     /// </summary>
     [HttpPut("{id}/deactivate")]
     public async Task<ActionResult> DeactivateUser(int id)
     {
         try
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Check if user is admin or staff
+            if (!await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "staff"))
+                return Forbid();
+
+            // Check if target user is buyer or seller (not admin/staff/support)
+            var targetUser = await _dbContext.Users
+                .Include(u => u.UserRoles)
+                .FirstOrDefaultAsync(u => u.Id == id);
+            
+            if (targetUser == null)
+                return NotFound($"User with ID {id} not found");
+
+            var targetRoles = targetUser.UserRoles.Select(ur => ur.Role.ToLower()).ToList();
+            if (targetRoles.Contains("admin") || targetRoles.Contains("staff") || targetRoles.Contains("support"))
+                return Forbid("Cannot deactivate admin, staff, or support users");
+
             var result = await _userService.DeactivateUserAsync(id);
             if (!result)
                 return NotFound($"User with ID {id} not found");
@@ -213,15 +357,28 @@ public class UsersController : ControllerBase
     public class AddRoleRequest { public string Role { get; set; } = string.Empty; }
 
     /// <summary>
-    /// Add a role to user (buyer/seller/admin)
+    /// Add a role to user (buyer/seller/admin/staff/support) - Admin only
     /// </summary>
     [HttpPost("{id}/roles")]
     public async Task<ActionResult> AddRole(int id, [FromBody] AddRoleRequest body)
     {
         try
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Check if user is admin
+            if (!await RoleHelper.IsAdminAsync(_dbContext, currentUserId))
+                return Forbid();
+
             if (body == null || string.IsNullOrWhiteSpace(body.Role))
                 return BadRequest(new { message = "role is required" });
+
+            // Validate role name
+            var validRoles = new[] { "buyer", "seller", "admin", "staff", "support" };
+            if (!validRoles.Contains(body.Role.ToLower()))
+                return BadRequest(new { message = $"Invalid role. Valid roles are: {string.Join(", ", validRoles)}" });
 
             var ok = await _userService.AddRoleAsync(id, body.Role);
             if (!ok) return BadRequest(new { message = "cannot add role" });

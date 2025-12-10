@@ -1,6 +1,7 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using BitNow_Backend.Services;
 using Microsoft.EntityFrameworkCore;
@@ -500,7 +501,7 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Approve an item (change status to 'approved')
+        /// Approve an item (change status to 'approved') - Admin/Staff only
         /// </summary>
         /// <param name="id">Item ID</param>
         [HttpPut("{id}/approve")]
@@ -508,6 +509,14 @@ namespace BitNow_Backend.Controllers
         {
             try
             {
+                // Check authorization
+                var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+                if (string.IsNullOrEmpty(userIdHeader) || !int.TryParse(userIdHeader, out var userId))
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_context, userId, "admin", "staff"))
+                    return Forbid();
+
                 // Lấy thông tin item trước khi approve để lấy sellerId và title
                 var item = await _itemService.GetByIdAsync(id);
                 if (item == null)
@@ -567,7 +576,7 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Reject an item (change status to 'rejected')
+        /// Reject an item (change status to 'rejected') - Admin/Staff only
         /// </summary>
         /// <param name="id">Item ID</param>
         /// <param name="dto">Reject reason</param>
@@ -576,6 +585,14 @@ namespace BitNow_Backend.Controllers
         {
             try
             {
+                // Check authorization
+                var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+                if (string.IsNullOrEmpty(userIdHeader) || !int.TryParse(userIdHeader, out var userId))
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_context, userId, "admin", "staff"))
+                    return Forbid();
+
                 // Validate reason
                 if (string.IsNullOrWhiteSpace(dto?.Reason))
                 {

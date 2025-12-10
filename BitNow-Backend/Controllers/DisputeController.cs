@@ -1,6 +1,7 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -32,13 +33,21 @@ public class DisputeController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy tất cả khiếu nại (Admin only)
+    /// Lấy tất cả khiếu nại (Admin/Staff/Support only)
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<DisputeDto>>> GetAll()
     {
         try
         {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+                return Unauthorized();
+
+            // Check if user is admin, staff, or support
+            if (!await IsAdminOrStaffOrSupportUserAsync(userId))
+                return Forbid();
+
             var disputes = await _disputeService.GetAllAsync();
             return Ok(disputes);
         }
@@ -50,13 +59,21 @@ public class DisputeController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy khiếu nại theo status (Admin only)
+    /// Lấy khiếu nại theo status (Admin/Staff/Support only)
     /// </summary>
     [HttpGet("status/{status}")]
     public async Task<ActionResult<IEnumerable<DisputeDto>>> GetByStatus(string status)
     {
         try
         {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+                return Unauthorized();
+
+            // Check if user is admin, staff, or support
+            if (!await IsAdminOrStaffOrSupportUserAsync(userId))
+                return Forbid();
+
             var disputes = await _disputeService.GetByStatusAsync(status);
             return Ok(disputes);
         }
@@ -79,13 +96,13 @@ public class DisputeController : ControllerBase
             if (dispute == null)
                 return NotFound(new { message = "Dispute not found" });
 
-            // Check authorization: buyer, seller, or admin can view
+            // Check authorization: buyer, seller, admin, staff, or support can view
             var userId = GetCurrentUserId();
             if (userId == null)
                 return Unauthorized();
 
-            var isAdmin = await IsAdminUserAsync(userId);
-            if (dispute.BuyerId != userId && dispute.SellerId != userId && !isAdmin)
+            var isAdminOrStaffOrSupport = await IsAdminOrStaffOrSupportUserAsync(userId);
+            if (dispute.BuyerId != userId && dispute.SellerId != userId && !isAdminOrStaffOrSupport)
                 return Forbid();
 
             return Ok(dispute);
@@ -109,13 +126,13 @@ public class DisputeController : ControllerBase
             if (dispute == null)
                 return NotFound(new { message = "Dispute not found" });
 
-            // Check authorization
+            // Check authorization: buyer, seller, admin, staff, or support can view
             var userId = GetCurrentUserId();
             if (userId == null)
                 return Unauthorized();
 
-            var isAdmin = await IsAdminUserAsync(userId);
-            if (dispute.BuyerId != userId && dispute.SellerId != userId && !isAdmin)
+            var isAdminOrStaffOrSupport = await IsAdminOrStaffOrSupportUserAsync(userId);
+            if (dispute.BuyerId != userId && dispute.SellerId != userId && !isAdminOrStaffOrSupport)
                 return Forbid();
 
             return Ok(dispute);
@@ -139,8 +156,8 @@ public class DisputeController : ControllerBase
             if (userId == null)
                 return Unauthorized();
 
-            var isAdmin = await IsAdminUserAsync(userId);
-            if (userId != buyerId && !isAdmin)
+            var isAdminOrStaffOrSupport = await IsAdminOrStaffOrSupportUserAsync(userId);
+            if (userId != buyerId && !isAdminOrStaffOrSupport)
                 return Forbid();
 
             var disputes = await _disputeService.GetByBuyerIdAsync(buyerId);
@@ -165,8 +182,8 @@ public class DisputeController : ControllerBase
             if (userId == null)
                 return Unauthorized();
 
-            var isAdmin = await IsAdminUserAsync(userId);
-            if (userId != sellerId && !isAdmin)
+            var isAdminOrStaffOrSupport = await IsAdminOrStaffOrSupportUserAsync(userId);
+            if (userId != sellerId && !isAdminOrStaffOrSupport)
                 return Forbid();
 
             var disputes = await _disputeService.GetBySellerIdAsync(sellerId);
@@ -193,17 +210,17 @@ public class DisputeController : ControllerBase
 
             var dispute = await _disputeService.CreateDisputeAsync(dto, buyerId.Value);
 
-            // Notify all admins
+            // Notify all admins, staff, and support users
             if (_notificationService != null)
             {
                 try
                 {
-                    var adminUsers = await GetAdminUsersAsync();
-                    foreach (var admin in adminUsers)
+                    var adminStaffSupportUsers = await GetAdminStaffSupportUsersAsync();
+                    foreach (var user in adminStaffSupportUsers)
                     {
                         await _notificationService.CreateNotificationAsync(new CreateNotificationDto
                         {
-                            UserId = admin.Id,
+                            UserId = user.Id,
                             Message = $"Có khiếu nại mới từ đơn hàng #{dto.OrderId}: {dto.Reason}",
                             Type = "dispute_created",
                             Link = $"/admin?tab=disputes&disputeId={dispute.Id}"
@@ -212,7 +229,7 @@ public class DisputeController : ControllerBase
                 }
                 catch (Exception notifEx)
                 {
-                    _logger.LogError(notifEx, "Failed to send notifications to admins for dispute {DisputeId}", dispute.Id);
+                    _logger.LogError(notifEx, "Failed to send notifications to admins/staff/support for dispute {DisputeId}", dispute.Id);
                 }
             }
 
@@ -234,7 +251,7 @@ public class DisputeController : ControllerBase
     }
 
     /// <summary>
-    /// Bắt đầu xử lý khiếu nại (Admin only)
+    /// Bắt đầu xử lý khiếu nại (Admin/Staff/Support only)
     /// </summary>
     [HttpPost("{id}/start-review")]
     public async Task<ActionResult<DisputeDto>> StartReview(int id)
@@ -244,6 +261,10 @@ public class DisputeController : ControllerBase
             var adminId = GetCurrentUserId();
             if (adminId == null)
                 return Unauthorized();
+
+            // Check if user is admin, staff, or support
+            if (!await IsAdminOrStaffOrSupportUserAsync(adminId))
+                return Forbid();
 
             var dispute = await _disputeService.StartReviewAsync(id, adminId.Value);
 
@@ -292,7 +313,7 @@ public class DisputeController : ControllerBase
     }
 
     /// <summary>
-    /// Giải quyết khiếu nại (Admin only)
+    /// Giải quyết khiếu nại (Admin/Staff/Support only)
     /// </summary>
     [HttpPost("{id}/resolve")]
     public async Task<ActionResult<DisputeDto>> Resolve(int id, [FromBody] ResolveDisputeDto dto)
@@ -303,32 +324,47 @@ public class DisputeController : ControllerBase
             if (adminId == null)
                 return Unauthorized();
 
+            // Check if user is admin, staff, or support
+            if (!await IsAdminOrStaffOrSupportUserAsync(adminId))
+                return Forbid();
+
             var dispute = await _disputeService.ResolveDisputeAsync(id, dto, adminId.Value);
 
-            // Notify buyer and seller
+            // Notify buyer and seller with detailed resolution information
             if (_notificationService != null)
             {
                 try
                 {
-                    var winnerName = dto.Winner.ToLower() == "buyer" ? dispute.BuyerName : dispute.SellerName;
-                    var message = dto.Winner.ToLower() == "buyer"
+                    var isBuyerWinner = dto.Winner.ToLower() == "buyer";
+                    var buyerMessage = isBuyerWinner
                         ? $"Khiếu nại đơn hàng #{dispute.OrderId} đã được giải quyết. Bạn thắng khiếu nại, tiền sẽ được hoàn lại."
-                        : $"Khiếu nại đơn hàng #{dispute.OrderId} đã được giải quyết. {winnerName} thắng khiếu nại.";
+                        : $"Khiếu nại đơn hàng #{dispute.OrderId} đã được giải quyết. Người bán thắng khiếu nại.";
+                    
+                    var sellerMessage = !isBuyerWinner
+                        ? $"Khiếu nại đơn hàng #{dispute.OrderId} đã được giải quyết. Bạn thắng khiếu nại, tiền sẽ được giải phóng."
+                        : $"Khiếu nại đơn hàng #{dispute.OrderId} đã được giải quyết. Người mua thắng khiếu nại.";
+
+                    // Add admin notes if available
+                    if (!string.IsNullOrWhiteSpace(dto.AdminNotes))
+                    {
+                        buyerMessage += $"\n\nLý do: {dto.AdminNotes}";
+                        sellerMessage += $"\n\nLý do: {dto.AdminNotes}";
+                    }
 
                     await _notificationService.CreateNotificationAsync(new CreateNotificationDto
                     {
                         UserId = dispute.BuyerId,
-                        Message = message,
+                        Message = buyerMessage,
                         Type = "dispute_resolved",
-                        Link = $"/orders"
+                        Link = $"/buyer?tab=orders"
                     });
 
                     await _notificationService.CreateNotificationAsync(new CreateNotificationDto
                     {
                         UserId = dispute.SellerId,
-                        Message = message,
+                        Message = sellerMessage,
                         Type = "dispute_resolved",
-                        Link = $"/orders"
+                        Link = $"/seller?tab=orders"
                     });
                 }
                 catch (Exception notifEx)
@@ -372,13 +408,22 @@ public class DisputeController : ControllerBase
 
     private async Task<bool> IsAdminUserAsync(int? userId)
     {
-        if (userId == null) return false;
-        
-        var user = await _dbContext.Users
-            .Include(u => u.UserRoles)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-        
-        return user?.UserRoles.Any(ur => ur.Role.ToLower() == "admin") ?? false;
+        return await RoleHelper.IsAdminAsync(_dbContext, userId);
+    }
+
+    private async Task<bool> IsSupportUserAsync(int? userId)
+    {
+        return await RoleHelper.IsSupportAsync(_dbContext, userId);
+    }
+
+    private async Task<bool> IsAdminOrSupportUserAsync(int? userId)
+    {
+        return await RoleHelper.HasAnyRoleAsync(_dbContext, userId, "admin", "support");
+    }
+
+    private async Task<bool> IsAdminOrStaffOrSupportUserAsync(int? userId)
+    {
+        return await RoleHelper.IsAdminOrStaffOrSupportAsync(_dbContext, userId);
     }
 
     private async Task<List<DAL.Models.User>> GetAdminUsersAsync()
@@ -387,6 +432,18 @@ public class DisputeController : ControllerBase
         return await _dbContext.Users
             .Include(u => u.UserRoles)
             .Where(u => u.UserRoles.Any(ur => ur.Role.ToLower() == "admin"))
+            .ToListAsync();
+    }
+
+    private async Task<List<DAL.Models.User>> GetAdminStaffSupportUsersAsync()
+    {
+        // Get all users with admin, staff, or support role
+        return await _dbContext.Users
+            .Include(u => u.UserRoles)
+            .Where(u => u.UserRoles.Any(ur => 
+                ur.Role.ToLower() == "admin" || 
+                ur.Role.ToLower() == "staff" || 
+                ur.Role.ToLower() == "support"))
             .ToListAsync();
     }
 }
