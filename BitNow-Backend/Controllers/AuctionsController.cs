@@ -189,7 +189,7 @@ namespace BitNow_Backend.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

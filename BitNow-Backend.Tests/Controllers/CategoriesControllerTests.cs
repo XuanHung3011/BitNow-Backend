@@ -1,8 +1,10 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.Controllers;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 
 namespace BitNow_Backend.Tests.Controllers;
@@ -15,7 +17,8 @@ public class CategoriesControllerTests
     public CategoriesControllerTests()
     {
         _categoryServiceMock = new Mock<ICategoryService>();
-        _controller = new CategoriesController(_categoryServiceMock.Object);
+        var dbContextMock = new Mock<BidNowDbContext>();
+        _controller = new CategoriesController(_categoryServiceMock.Object, dbContextMock.Object);
     }
 
     /// <summary>

@@ -1,9 +1,11 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.Controllers;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -21,7 +23,8 @@ public class UsersControllerTests
         _userServiceMock = new Mock<IUserService>();
         _loggerMock = new Mock<ILogger<UsersController>>();
         _fileUploadServiceMock = new Mock<IFileUploadService>();
-        _controller = new UsersController(_userServiceMock.Object, _loggerMock.Object, _fileUploadServiceMock.Object);
+        var dbContextMock = new Mock<BidNowDbContext>();
+        _controller = new UsersController(_userServiceMock.Object, _loggerMock.Object, _fileUploadServiceMock.Object, dbContextMock.Object);
     }
 
     /// <summary>
