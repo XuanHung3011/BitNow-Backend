@@ -139,6 +139,8 @@ namespace BitNow_Backend.BLL.Services
 
 		/// <summary>
 		/// Xử lý auto bid sau khi có bid mới: kiểm tra các auto bid active và tự động đặt giá nếu cần
+		/// CRITICAL: Method này sẽ được gọi cả khi manual bid và auto bid đặt giá
+		/// Logic đảm bảo các auto bid có thể tiếp tục đấu giá với nhau cho đến khi đạt maxAmount
 		/// </summary>
 		public async Task ProcessAutoBidsAfterBidAsync(int auctionId, int currentBidderId, decimal currentBid)
 		{
@@ -148,56 +150,106 @@ namespace BitNow_Backend.BLL.Services
 			var auction = await _ctx.Auctions.FindAsync(auctionId);
 			if (auction == null || auction.Status != "active") return;
 
-			foreach (var autoBid in activeAutoBids)
+			// CRITICAL: Sắp xếp auto bids theo maxAmount (từ cao xuống thấp) để ưu tiên người có maxAmount cao hơn
+			// Điều này giúp đảm bảo auto bid với maxAmount cao hơn sẽ đấu giá trước
+			var sortedAutoBids = activeAutoBids.OrderByDescending(ab => ab.MaxAmount).ToList();
+			var deactivatedAutoBidIds = new HashSet<int>(); // Track các auto bid đã bị deactivate
+
+			// CRITICAL: Track người đã đặt giá trong mỗi iteration để tránh một user đặt giá nhiều lần liên tiếp
+			// Mỗi user chỉ được đặt giá một lần trong một chu kỳ process
+			// Chỉ tiếp tục khi có user KHÁC đặt giá (trigger lại ProcessAutoBidsAfterBidAsync)
+			var usersWhoBidInThisCycle = new HashSet<int> { currentBidderId }; // Bắt đầu với người trigger
+			int maxIterations = sortedAutoBids.Count * 2; // Giảm iterations để tránh một user đặt nhiều lần
+			int iterationCount = 0;
+			bool anyBidPlaced = true;
+			int lastBidderId = currentBidderId; // Track người đặt giá cuối cùng
+
+			// Tiếp tục process cho đến khi không còn auto bid nào có thể đặt giá
+			while (anyBidPlaced && iterationCount < maxIterations)
 			{
-				// Bỏ qua nếu chính người này vừa đặt giá
-				if (autoBid.UserId == currentBidderId) continue;
+				anyBidPlaced = false;
+				iterationCount++;
+				int newBidderId = -1; // Track người đặt giá trong iteration này
 
-				// QUAN TRỌNG: Fetch lại giá mới nhất từ database trong mỗi iteration
-				// để đảm bảo luôn dùng giá mới nhất (có thể đã thay đổi bởi auto bid trước đó)
-				await _ctx.Entry(auction).ReloadAsync();
-				var latestCurrentBid = auction.CurrentBid ?? auction.StartingBid;
-
-				// Kiểm tra xem có thể đặt giá cao hơn không
-				var increment = CalculateBidIncrement(latestCurrentBid);
-				var nextBid = latestCurrentBid + increment;
-
-				// Nếu giá tiếp theo vẫn trong giới hạn maxAmount và chưa vượt quá
-				if (nextBid <= autoBid.MaxAmount && nextBid > latestCurrentBid)
+				foreach (var autoBid in sortedAutoBids)
 				{
-					try
+					// Bỏ qua nếu đã bị deactivate
+					if (deactivatedAutoBidIds.Contains(autoBid.Id)) continue;
+
+					// CRITICAL: Bỏ qua nếu user này đã đặt giá trong chu kỳ này
+					// Chỉ cho phép một user đặt giá một lần trong một chu kỳ process
+					// Để tiếp tục đấu giá, cần có user KHÁC trigger lại ProcessAutoBidsAfterBidAsync
+					if (usersWhoBidInThisCycle.Contains(autoBid.UserId)) continue;
+
+					// QUAN TRỌNG: Fetch lại giá mới nhất từ database trong mỗi iteration
+					// để đảm bảo luôn dùng giá mới nhất (có thể đã thay đổi bởi auto bid trước đó)
+					await _ctx.Entry(auction).ReloadAsync();
+					var latestCurrentBid = auction.CurrentBid ?? auction.StartingBid;
+
+					// Kiểm tra xem có thể đặt giá cao hơn không
+					var increment = CalculateBidIncrement(latestCurrentBid);
+					var nextBid = latestCurrentBid + increment;
+
+					// Nếu giá tiếp theo vẫn trong giới hạn maxAmount và chưa vượt quá
+					if (nextBid <= autoBid.MaxAmount && nextBid > latestCurrentBid)
 					{
-						// Resolve IBidService từ service provider để tránh circular dependency
-						// Tạo scope mới để tránh vấn đề với DbContext
-						// IBidService sẽ tự động broadcast SignalR qua IBidNotificationService
-						using var scope = _serviceScopeFactory.CreateScope();
-						var bidService = scope.ServiceProvider.GetRequiredService<IBidService>();
-						// Tự động đặt giá với IsAutoBid = true
-						// Broadcast SignalR sẽ được xử lý tự động trong BidService.PlaceBidAsync
-						var bidResult = await bidService.PlaceBidAsync(auctionId, autoBid.UserId, nextBid, isAutoBid: true);
-						
-						// Log để debug
-						System.Diagnostics.Debug.WriteLine($"Auto bid placed: Auction {auctionId}, User {autoBid.UserId}, Amount {nextBid}, New Current: {bidResult.CurrentBid}");
-						
-						// Cập nhật latestCurrentBid từ kết quả để iteration tiếp theo dùng giá mới
-						latestCurrentBid = bidResult.CurrentBid;
-						
-						// Có thể thêm delay nhỏ để tránh race condition nếu nhiều auto bid cùng lúc
-						await Task.Delay(100);
+						try
+						{
+							// Resolve IBidService từ service provider để tránh circular dependency
+							// Tạo scope mới để tránh vấn đề với DbContext
+							// IBidService sẽ tự động broadcast SignalR qua IBidNotificationService
+							using var scope = _serviceScopeFactory.CreateScope();
+							var bidService = scope.ServiceProvider.GetRequiredService<IBidService>();
+							// Tự động đặt giá với IsAutoBid = true
+							// Broadcast SignalR sẽ được xử lý tự động trong BidService.PlaceBidAsync
+							var bidResult = await bidService.PlaceBidAsync(auctionId, autoBid.UserId, nextBid, isAutoBid: true);
+							
+							// Log để debug
+							System.Diagnostics.Debug.WriteLine($"Auto bid placed: Auction {auctionId}, User {autoBid.UserId}, Amount {nextBid}, New Current: {bidResult.CurrentBid}, Iteration: {iterationCount}");
+							
+							// Đánh dấu user này đã đặt giá trong chu kỳ này
+							usersWhoBidInThisCycle.Add(autoBid.UserId);
+							newBidderId = autoBid.UserId;
+							lastBidderId = autoBid.UserId;
+							anyBidPlaced = true; // Đánh dấu có bid được đặt trong iteration này
+							
+							// CRITICAL: Break sau khi một user đặt giá thành công
+							// Chỉ cho phép một user đặt giá một lần trong mỗi iteration
+							// Để tiếp tục, cần có user khác trigger lại ProcessAutoBidsAfterBidAsync
+							// Điều này đảm bảo các auto bid đấu giá với nhau, không phải một mình
+							break;
+						}
+						catch (Exception ex)
+						{
+							// Log error để debug
+							System.Diagnostics.Debug.WriteLine($"Auto bid place bid error: {ex.Message}");
+							// Nếu đặt giá thất bại (có thể do đã bị người khác vượt), bỏ qua
+							continue;
+						}
 					}
-					catch (Exception ex)
+					else if (nextBid > autoBid.MaxAmount)
 					{
-						// Log error để debug
-						System.Diagnostics.Debug.WriteLine($"Auto bid place bid error: {ex.Message}");
-						// Nếu đặt giá thất bại (có thể do đã bị người khác vượt), bỏ qua
-						continue;
+						// Vượt quá max amount, deactivate auto bid
+						await _autoBidRepository.DeactivateAsync(autoBid.Id);
+						deactivatedAutoBidIds.Add(autoBid.Id); // Đánh dấu đã deactivate
 					}
 				}
-				else if (nextBid > autoBid.MaxAmount)
+
+				// CRITICAL: Nếu không có user nào đặt giá trong iteration này, dừng lại
+				// Điều này đảm bảo không có user nào đặt giá một mình nhiều lần
+				if (!anyBidPlaced)
 				{
-					// Vượt quá max amount, deactivate auto bid
-					await _autoBidRepository.DeactivateAsync(autoBid.Id);
+					System.Diagnostics.Debug.WriteLine($"No more auto bids can place bid in iteration {iterationCount} for auction {auctionId}");
+					break;
 				}
+
+				// Delay nhỏ để tránh race condition và đảm bảo database được cập nhật
+				await Task.Delay(150);
+			}
+
+			if (iterationCount >= maxIterations)
+			{
+				System.Diagnostics.Debug.WriteLine($"Auto bid processing reached max iterations ({maxIterations}) for auction {auctionId}");
 			}
 		}
 	}
