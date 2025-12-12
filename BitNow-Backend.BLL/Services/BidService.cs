@@ -25,6 +25,7 @@ namespace BitNow_Backend.BLL.Services
 		private readonly	IConnectionMultiplexer? _redis;
 		private readonly IServiceScopeFactory _serviceScopeFactory;
 		private readonly IBidNotificationService? _bidNotificationService;
+		private readonly INotificationService? _notificationService;
 
 		public BidService(
 			BidNowDbContext ctx,
@@ -39,6 +40,7 @@ namespace BitNow_Backend.BLL.Services
 			_redis = serviceProvider.GetService<IConnectionMultiplexer>();
 			_serviceScopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
 			_bidNotificationService = serviceProvider.GetService<IBidNotificationService>();
+			_notificationService = serviceProvider.GetService<INotificationService>();
 		}
 
 		private static string BidsKey(int auctionId) => $"auction:{auctionId}:bids";
@@ -47,7 +49,9 @@ namespace BitNow_Backend.BLL.Services
 		public async Task<BidResultDto> PlaceBidAsync(int auctionId, int bidderId, decimal amount, bool isAutoBid = false)
 		{
 			// Validate and persist in DB with optimistic checks
-			var auction = await _ctx.Auctions.FirstOrDefaultAsync(a => a.Id == auctionId);
+			var auction = await _ctx.Auctions
+				.Include(a => a.Item)
+				.FirstOrDefaultAsync(a => a.Id == auctionId);
 			if (auction == null) throw new InvalidOperationException("Auction not found");
 			// Accept 'active' as the running status per DB constraint
 			if (!string.Equals(auction.Status, "active", StringComparison.OrdinalIgnoreCase))
@@ -56,6 +60,13 @@ namespace BitNow_Backend.BLL.Services
 			}
 			if (auction.EndTime <= DateTime.Now) throw new InvalidOperationException("Auction ended");
 			if (amount <= auction.CurrentBid || amount < auction.StartingBid) throw new InvalidOperationException("Bid too low");
+
+			// Lấy bid cao nhất trước đó để thông báo outbid (nếu có)
+			var previousHighestBid = await _ctx.Bids
+				.Where(b => b.AuctionId == auctionId)
+				.OrderByDescending(b => b.Amount)
+				.ThenByDescending(b => b.BidTime)
+				.FirstOrDefaultAsync();
 
 			// Create bid record
 			var bid = new Bid
@@ -116,6 +127,32 @@ namespace BitNow_Backend.BLL.Services
 					BidTime = bid.BidTime ?? DateTime.Now
 				}
 			};
+
+			// Nếu có bidder trước đó và khác bidder hiện tại -> gửi thông báo bị vượt giá
+			try
+			{
+				if (previousHighestBid != null
+					&& previousHighestBid.BidderId != bidderId
+					&& amount > previousHighestBid.Amount
+					&& _notificationService != null)
+				{
+					var prevBidderId = previousHighestBid.BidderId;
+					var itemTitle = auction.Item?.Title ?? $"Auction #{auctionId}";
+					var message = $"Bạn đã bị vượt giá ở phiên \"{itemTitle}\"";
+
+					await _notificationService.CreateNotificationAsync(new CreateNotificationDto
+					{
+						UserId = prevBidderId,
+						Type = "bid_outbid",
+						Message = message,
+						Link = $"/auction/{auctionId}"
+					});
+				}
+			}
+			catch
+			{
+				// Không block flow đặt giá nếu gửi thông báo thất bại
+			}
 
 			// Broadcast SignalR nếu có notification service (cho cả manual và auto bid)
 			// Broadcast ngay lập tức để tất cả clients nhận được update real-time

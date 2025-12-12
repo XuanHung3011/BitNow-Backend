@@ -222,7 +222,7 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         if (string.IsNullOrWhiteSpace(role)) return false;
         role = role.Trim().ToLowerInvariant();
 
-        var allowed = new HashSet<string>(new[] { "buyer", "seller", "admin" });
+        var allowed = new HashSet<string>(new[] { "buyer", "seller", "admin", "staff", "support" });
         if (!allowed.Contains(role)) return false;
 
         var user = await _userRepository.GetByIdAsync(userId);

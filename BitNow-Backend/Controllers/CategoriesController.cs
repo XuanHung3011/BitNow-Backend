@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.BLL.IServices;
+using BitNow_Backend.Helpers;
 
 namespace BitNow_Backend.Controllers
 {
@@ -9,10 +11,25 @@ namespace BitNow_Backend.Controllers
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
+        private readonly BidNowDbContext _dbContext;
 
-        public CategoriesController(ICategoryService categoryService)
+        public CategoriesController(ICategoryService categoryService, BidNowDbContext dbContext)
         {
             _categoryService = categoryService;
+            _dbContext = dbContext;
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(userIdHeader) && int.TryParse(userIdHeader, out var userId))
+            {
+                return userId;
+            }
+            var userIdClaim = User.FindFirst("userId")?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out userId))
+                return null;
+            return userId;
         }
 
         /// <summary>
@@ -84,13 +101,20 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Create a new category
+        /// Create a new category (Admin/Staff only)
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<CategoryDtos>> CreateCategory(CreateCategoryDtos createCategoryDtos)
         {
             try
             {
+                var userId = GetCurrentUserId();
+                if (userId == null)
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_dbContext, userId, "admin", "staff"))
+                    return Forbid();
+
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
@@ -106,13 +130,20 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Update an existing category
+        /// Update an existing category (Admin/Staff only)
         /// </summary>
         [HttpPut("{id}")]
         public async Task<ActionResult<CategoryDtos>> UpdateCategory(int id, UpdateCategoryDtos updateCategoryDtos)
         {
             try
             {
+                var userId = GetCurrentUserId();
+                if (userId == null)
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_dbContext, userId, "admin", "staff"))
+                    return Forbid();
+
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
@@ -133,13 +164,20 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Delete a category
+        /// Delete a category (Admin/Staff only)
         /// </summary>
         [HttpDelete("{id}")]
         public async Task<ActionResult> DeleteCategory(int id)
         {
             try
             {
+                var userId = GetCurrentUserId();
+                if (userId == null)
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_dbContext, userId, "admin", "staff"))
+                    return Forbid();
+
                 var result = await _categoryService.DeleteCategoryAsync(id);
 
                 if (!result)

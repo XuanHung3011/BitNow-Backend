@@ -30,6 +30,15 @@ public class MessagesControllerTests
 
     #region SendMessage Tests
 
+    /// <summary>
+    /// Test ID: MSG-01
+    /// Precondition: Sender và Receiver tồn tại, Auction tồn tại (nếu có), MessageService hoạt động bình thường, SignalR HubContext hoạt động
+    /// Input: SendMessageRequest hợp lệ (SenderId=1, ReceiverId=2, AuctionId=1, Content="Hello, this is a test message")
+    /// Condition: Gửi message giữa 2 users và broadcast qua SignalR
+    /// Confirmation: HTTP 200 OK, trả về MessageResponseDto với Id=1, đồng thời broadcast message qua SignalR
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng gửi message thành công và broadcast real-time
+    /// </summary>
     [Fact]
     public async Task SendMessage_WithValidRequest_ReturnsOk()
     {
@@ -76,6 +85,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.SendMessageAsync(request), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-02
+    /// Precondition: ModelState không hợp lệ
+    /// Input: SendMessageRequest với Content rỗng ("")
+    /// Condition: Gửi message với dữ liệu không hợp lệ theo validation rules
+    /// Confirmation: HTTP 400 BadRequest, không gọi SendMessageAsync
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation model state trước khi xử lý
+    /// </summary>
     [Fact]
     public async Task SendMessage_WithInvalidModel_ReturnsBadRequest()
     {
@@ -97,6 +115,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.SendMessageAsync(It.IsAny<SendMessageRequest>()), Times.Never);
     }
 
+    /// <summary>
+    /// Test ID: MSG-03
+    /// Precondition: Service trả về null (message không được tạo)
+    /// Input: SendMessageRequest hợp lệ
+    /// Condition: Service trả về null thay vì MessageResponseDto
+    /// Confirmation: HTTP 400 BadRequest, thông báo Failed to send message
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp service trả về null
+    /// </summary>
     [Fact]
     public async Task SendMessage_WithNullMessage_ReturnsBadRequest()
     {
@@ -119,6 +146,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.SendMessageAsync(request), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-04
+    /// Precondition: SenderId = ReceiverId (không hợp lệ)
+    /// Input: SendMessageRequest với SenderId=1, ReceiverId=1 (cùng một user)
+    /// Condition: Service throw ArgumentException (Cannot send message to yourself)
+    /// Confirmation: HTTP 400 BadRequest, thông báo lỗi từ service
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp gửi message cho chính mình
+    /// </summary>
     [Fact]
     public async Task SendMessage_WithArgumentException_ReturnsBadRequest()
     {
@@ -142,6 +178,15 @@ public class MessagesControllerTests
         badRequestResult!.Value.Should().NotBeNull();
     }
 
+    /// <summary>
+    /// Test ID: MSG-05
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: SendMessageRequest hợp lệ
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task SendMessage_WithException_ReturnsInternalServerError()
     {
@@ -169,6 +214,15 @@ public class MessagesControllerTests
 
     #region GetConversations Tests
 
+    /// <summary>
+    /// Test ID: MSG-06
+    /// Precondition: User tồn tại trong hệ thống, có conversations, MessageService hoạt động bình thường
+    /// Input: UserId hợp lệ (1)
+    /// Condition: Lấy danh sách conversations của user với last message và unread count
+    /// Confirmation: HTTP 200 OK, trả về danh sách ConversationDto với OtherUserId, LastMessage, UnreadCount
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy danh sách conversations thành công
+    /// </summary>
     [Fact]
     public async Task GetConversations_WithValidUserId_ReturnsOk()
     {
@@ -207,6 +261,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.GetConversationsAsync(userId), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-07
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: UserId hợp lệ (1)
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetConversations_WithException_ReturnsInternalServerError()
     {
@@ -229,6 +292,15 @@ public class MessagesControllerTests
 
     #region GetConversation Tests
 
+    /// <summary>
+    /// Test ID: MSG-08
+    /// Precondition: Cả 2 users tồn tại trong hệ thống, có messages giữa họ, MessageService hoạt động bình thường
+    /// Input: UserId1 hợp lệ (1), UserId2 hợp lệ (2), AuctionId = null (không filter theo auction)
+    /// Condition: Lấy danh sách messages trong conversation giữa 2 users
+    /// Confirmation: HTTP 200 OK, trả về danh sách MessageResponseDto sắp xếp theo thời gian
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy conversation messages thành công
+    /// </summary>
     [Fact]
     public async Task GetConversation_WithValidParams_ReturnsOk()
     {
@@ -268,6 +340,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.GetConversationAsync(userId1, userId2, null), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-09
+    /// Precondition: Cả 2 users tồn tại, Auction tồn tại, có messages liên quan đến auction, MessageService hoạt động bình thường
+    /// Input: UserId1 hợp lệ (1), UserId2 hợp lệ (2), AuctionId hợp lệ (5)
+    /// Condition: Lấy danh sách messages trong conversation giữa 2 users liên quan đến auction cụ thể
+    /// Confirmation: HTTP 200 OK, trả về danh sách MessageResponseDto với AuctionId=5
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy conversation messages theo auction thành công
+    /// </summary>
     [Fact]
     public async Task GetConversation_WithAuctionId_ReturnsOk()
     {
@@ -301,6 +382,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.GetConversationAsync(userId1, userId2, auctionId), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-10
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: UserId1 hợp lệ (1), UserId2 hợp lệ (2)
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetConversation_WithException_ReturnsInternalServerError()
     {
@@ -324,6 +414,15 @@ public class MessagesControllerTests
 
     #region MarkAsRead Tests
 
+    /// <summary>
+    /// Test ID: MSG-11
+    /// Precondition: Message tồn tại trong hệ thống, MessageService hoạt động bình thường
+    /// Input: MessageId hợp lệ (1)
+    /// Condition: Đánh dấu message là đã đọc
+    /// Confirmation: HTTP 200 OK, thông báo Message marked as read
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng đánh dấu message đã đọc thành công
+    /// </summary>
     [Fact]
     public async Task MarkAsRead_WithValidId_ReturnsOk()
     {
@@ -341,6 +440,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.MarkAsReadAsync(messageId), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-12
+    /// Precondition: Message không tồn tại trong hệ thống
+    /// Input: MessageId không tồn tại (999)
+    /// Condition: Đánh dấu message không tồn tại là đã đọc
+    /// Confirmation: HTTP 404 NotFound, thông báo Message not found
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp message không tồn tại
+    /// </summary>
     [Fact]
     public async Task MarkAsRead_WithNotFound_ReturnsNotFound()
     {
@@ -359,6 +467,15 @@ public class MessagesControllerTests
         notFoundResult!.Value.Should().NotBeNull();
     }
 
+    /// <summary>
+    /// Test ID: MSG-13
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: MessageId hợp lệ (1)
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task MarkAsRead_WithException_ReturnsInternalServerError()
     {
@@ -381,6 +498,15 @@ public class MessagesControllerTests
 
     #region GetUnreadMessages Tests
 
+    /// <summary>
+    /// Test ID: MSG-14
+    /// Precondition: User tồn tại trong hệ thống, có unread messages, MessageService hoạt động bình thường
+    /// Input: UserId hợp lệ (1)
+    /// Condition: Lấy danh sách unread messages của user
+    /// Confirmation: HTTP 200 OK, trả về danh sách MessageResponseDto với IsRead=false
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy unread messages thành công
+    /// </summary>
     [Fact]
     public async Task GetUnreadMessages_WithValidUserId_ReturnsOk()
     {
@@ -421,6 +547,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.GetUnreadMessagesAsync(userId), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-15
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: UserId hợp lệ (1)
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetUnreadMessages_WithException_ReturnsInternalServerError()
     {
@@ -443,6 +578,15 @@ public class MessagesControllerTests
 
     #region GetAllMessages Tests
 
+    /// <summary>
+    /// Test ID: MSG-16
+    /// Precondition: User tồn tại trong hệ thống, có messages (sent và received), MessageService hoạt động bình thường
+    /// Input: UserId hợp lệ (1)
+    /// Condition: Lấy tất cả messages của user (bao gồm cả sent và received)
+    /// Confirmation: HTTP 200 OK, trả về danh sách MessageResponseDto với cả sent và received messages
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy tất cả messages của user thành công
+    /// </summary>
     [Fact]
     public async Task GetAllMessages_WithValidUserId_ReturnsOk()
     {
@@ -483,6 +627,15 @@ public class MessagesControllerTests
         _messageServiceMock.Verify(x => x.GetAllMessagesByUserIdAsync(userId), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: MSG-17
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: UserId hợp lệ (1)
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetAllMessages_WithException_ReturnsInternalServerError()
     {

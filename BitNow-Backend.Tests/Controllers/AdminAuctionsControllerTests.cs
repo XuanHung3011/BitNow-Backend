@@ -40,6 +40,15 @@ public class AdminAuctionsControllerTests
 
     #region GetAuctions
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-01
+    /// Precondition: AuctionService hoạt động bình thường, có auctions trong hệ thống
+    /// Input: searchTerm hợp lệ ("item"), statuses hợp lệ ("active,completed"), sortBy hợp lệ ("EndTime"), sortOrder hợp lệ ("desc"), page hợp lệ (1), pageSize hợp lệ (10)
+    /// Condition: Lấy danh sách auctions với filter và sort hợp lệ
+    /// Confirmation: HTTP 200 OK, trả về PaginatedResult với AuctionListItemDto
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy danh sách auctions với filter thành công
+    /// </summary>
     [Fact]
     public async Task GetAuctions_WithValidParams_ReturnsOk()
     {
@@ -78,6 +87,15 @@ public class AdminAuctionsControllerTests
         okResult!.Value.Should().BeEquivalentTo(expectedResult);
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-02
+    /// Precondition: sortBy không hợp lệ
+    /// Input: sortBy không hợp lệ ("InvalidField")
+    /// Condition: Lấy auctions với sortBy không được phép
+    /// Confirmation: HTTP 400 BadRequest, thông báo Invalid sortBy field
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation sortBy chỉ cho phép các field hợp lệ
+    /// </summary>
     [Fact]
     public async Task GetAuctions_WithInvalidSortBy_ReturnsBadRequest()
     {
@@ -88,6 +106,15 @@ public class AdminAuctionsControllerTests
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-03
+    /// Precondition: sortOrder không hợp lệ
+    /// Input: sortOrder không hợp lệ ("invalid")
+    /// Condition: Lấy auctions với sortOrder không được phép (chỉ cho phép "asc" hoặc "desc")
+    /// Confirmation: HTTP 400 BadRequest, thông báo Invalid sortOrder
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation sortOrder chỉ cho phép "asc" hoặc "desc"
+    /// </summary>
     [Fact]
     public async Task GetAuctions_WithInvalidSortOrder_ReturnsBadRequest()
     {
@@ -98,6 +125,15 @@ public class AdminAuctionsControllerTests
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-04
+    /// Precondition: statuses chứa giá trị không hợp lệ
+    /// Input: statuses chứa status không hợp lệ ("active,invalid-status")
+    /// Condition: Lấy auctions với status không được phép
+    /// Confirmation: HTTP 400 BadRequest, thông báo Invalid status
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation statuses chỉ cho phép các status hợp lệ
+    /// </summary>
     [Fact]
     public async Task GetAuctions_WithInvalidStatuses_ReturnsBadRequest()
     {
@@ -108,6 +144,15 @@ public class AdminAuctionsControllerTests
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-05
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: Tham số hợp lệ
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetAuctions_WithException_ReturnsInternalServerError()
     {
@@ -128,6 +173,15 @@ public class AdminAuctionsControllerTests
 
     #region GetAuctionDetail
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-06
+    /// Precondition: Auction tồn tại trong hệ thống, AuctionService hoạt động bình thường
+    /// Input: AuctionId hợp lệ (1)
+    /// Condition: Lấy chi tiết auction theo ID hợp lệ
+    /// Confirmation: HTTP 200 OK, trả về AuctionDetailDto với Id=1, ItemTitle="Item 1"
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng lấy chi tiết auction thành công
+    /// </summary>
     [Fact]
     public async Task GetAuctionDetail_WithExistingId_ReturnsOk()
     {
@@ -151,6 +205,15 @@ public class AdminAuctionsControllerTests
         okResult!.Value.Should().BeEquivalentTo(auction);
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-07
+    /// Precondition: Auction không tồn tại trong hệ thống
+    /// Input: AuctionId không tồn tại (999)
+    /// Condition: Lấy chi tiết auction với ID không tồn tại
+    /// Confirmation: HTTP 404 NotFound, thông báo Auction not found
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp auction không tồn tại
+    /// </summary>
     [Fact]
     public async Task GetAuctionDetail_WithNonExistingId_ReturnsNotFound()
     {
@@ -165,6 +228,15 @@ public class AdminAuctionsControllerTests
         result.Result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-08
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: AuctionId hợp lệ (1)
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task GetAuctionDetail_WithException_ReturnsInternalServerError()
     {
@@ -185,6 +257,15 @@ public class AdminAuctionsControllerTests
 
     #region UpdateStatus
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-09
+    /// Precondition: Status rỗng hoặc không hợp lệ
+    /// Input: UpdateAuctionStatusRequest với Status rỗng ("")
+    /// Condition: Cập nhật status với status rỗng
+    /// Confirmation: HTTP 400 BadRequest, thông báo Status is required
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation status không được rỗng
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_WithMissingStatus_ReturnsBadRequest()
     {
@@ -201,6 +282,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-10
+    /// Precondition: Status không hợp lệ (không nằm trong danh sách cho phép)
+    /// Input: UpdateAuctionStatusRequest với Status không hợp lệ ("invalid-status")
+    /// Condition: Cập nhật status với giá trị không được phép
+    /// Confirmation: HTTP 400 BadRequest, thông báo Invalid status
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation status chỉ cho phép các giá trị hợp lệ
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_WithInvalidStatus_ReturnsBadRequest()
     {
@@ -217,6 +307,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-11
+    /// Precondition: Auction không tồn tại trong hệ thống
+    /// Input: AuctionId không tồn tại (1), UpdateAuctionStatusRequest hợp lệ (Status="active")
+    /// Condition: Cập nhật status cho auction không tồn tại
+    /// Confirmation: HTTP 404 NotFound, thông báo Auction not found
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp auction không tồn tại
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_WhenAuctionNotFound_ReturnsNotFound()
     {
@@ -236,6 +335,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-12
+    /// Precondition: Status = "paused" nhưng Reason quá ngắn (< 10 ký tự)
+    /// Input: UpdateAuctionStatusRequest với Status="paused", Reason="Too short" (< 10 ký tự)
+    /// Condition: Cập nhật status thành paused với reason không đủ dài
+    /// Confirmation: HTTP 400 BadRequest, thông báo Reason must be at least 10 characters
+    /// Type: Boundary/Abnormal
+    /// Test Requirement: Kiểm tra validation reason phải >= 10 ký tự khi pause auction
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_PausedWithInvalidReason_ReturnsBadRequest()
     {
@@ -265,6 +373,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-13
+    /// Precondition: Status = "paused" nhưng AdminSignature không hợp lệ
+    /// Input: UpdateAuctionStatusRequest với Status="paused", Reason hợp lệ, AdminSignature sai ("WrongSignature")
+    /// Condition: Cập nhật status thành paused với admin signature không hợp lệ
+    /// Confirmation: HTTP 400 BadRequest, thông báo Invalid admin signature
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation admin signature khi pause auction
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_PausedWithInvalidSignature_ReturnsBadRequest()
     {
@@ -294,6 +411,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-14
+    /// Precondition: Auction tồn tại, Status hợp lệ và có thể transition, AuctionService hoạt động bình thường, SignalR HubContext hoạt động
+    /// Input: AuctionId hợp lệ (1), UpdateAuctionStatusRequest hợp lệ (Status="completed")
+    /// Condition: Cập nhật status auction và broadcast qua SignalR
+    /// Confirmation: HTTP 204 NoContent, đồng thời broadcast status update qua SignalR
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng cập nhật status auction thành công
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_WithValidData_ReturnsNoContent()
     {
@@ -333,6 +459,15 @@ public class AdminAuctionsControllerTests
         _auctionServiceMock.Verify(x => x.UpdateStatusAsync(1, "completed"), Times.Once);
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-15
+    /// Precondition: Status transition không hợp lệ (ví dụ: từ "draft" sang "active" không được phép)
+    /// Input: AuctionId hợp lệ (1), UpdateAuctionStatusRequest với Status="active", nhưng current status="draft"
+    /// Condition: Service throw ArgumentException (Invalid status transition)
+    /// Confirmation: HTTP 400 BadRequest, thông báo lỗi từ service
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp status transition không hợp lệ
+    /// </summary>
     [Fact]
     public async Task UpdateStatus_WithArgumentException_ReturnsBadRequest()
     {
@@ -367,6 +502,15 @@ public class AdminAuctionsControllerTests
 
     #region ResumeAuction
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-16
+    /// Precondition: Auction không tồn tại trong hệ thống
+    /// Input: AuctionId không tồn tại (1), ResumeAuctionRequest hợp lệ
+    /// Condition: Resume auction không tồn tại
+    /// Confirmation: HTTP 404 NotFound, thông báo Auction not found
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý trường hợp auction không tồn tại khi resume
+    /// </summary>
     [Fact]
     public async Task ResumeAuction_WhenAuctionNotFound_ReturnsNotFound()
     {
@@ -381,6 +525,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-17
+    /// Precondition: Auction status không phải "paused"
+    /// Input: AuctionId hợp lệ (1), Auction có Status="active" (không phải "paused")
+    /// Condition: Resume auction với status không phải "paused"
+    /// Confirmation: HTTP 400 BadRequest, thông báo Auction is not paused
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation chỉ cho phép resume auction có status="paused"
+    /// </summary>
     [Fact]
     public async Task ResumeAuction_WhenStatusIsNotPaused_ReturnsBadRequest()
     {
@@ -403,6 +556,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-18
+    /// Precondition: Auction đã hết hạn (EndTime đã qua)
+    /// Input: AuctionId hợp lệ (1), Auction có Status="paused" nhưng EndTime đã qua
+    /// Condition: Resume auction đã hết hạn
+    /// Confirmation: HTTP 400 BadRequest, thông báo Auction has already ended
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra validation không cho phép resume auction đã hết hạn
+    /// </summary>
     [Fact]
     public async Task ResumeAuction_WhenEndTimePassed_ReturnsBadRequest()
     {
@@ -425,6 +587,15 @@ public class AdminAuctionsControllerTests
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-19
+    /// Precondition: Auction tồn tại, Status="paused", EndTime chưa qua, AuctionService hoạt động bình thường, SignalR HubContext hoạt động, có bidders và watchers
+    /// Input: AuctionId hợp lệ (1), ResumeAuctionRequest hợp lệ (Reason="Resume after maintenance")
+    /// Condition: Resume auction và gửi notification cho bidders/watchers, broadcast qua SignalR
+    /// Confirmation: HTTP 204 NoContent, đồng thời tạo notifications và broadcast qua SignalR
+    /// Type: Normal
+    /// Test Requirement: Kiểm tra chức năng resume auction thành công và gửi notifications
+    /// </summary>
     [Fact]
     public async Task ResumeAuction_WithValidData_ReturnsNoContent()
     {
@@ -483,6 +654,15 @@ public class AdminAuctionsControllerTests
             Times.AtLeastOnce);
     }
 
+    /// <summary>
+    /// Test ID: ADMIN-AUCTION-20
+    /// Precondition: Service gặp lỗi hệ thống
+    /// Input: AuctionId hợp lệ (1), ResumeAuctionRequest hợp lệ
+    /// Condition: Service throw Exception (database error)
+    /// Confirmation: HTTP 500 InternalServerError, thông báo Internal server error
+    /// Type: Abnormal
+    /// Test Requirement: Kiểm tra xử lý exception từ service
+    /// </summary>
     [Fact]
     public async Task ResumeAuction_WithException_ReturnsInternalServerError()
     {

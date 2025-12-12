@@ -1,6 +1,7 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using BitNow_Backend.Services;
 using Microsoft.EntityFrameworkCore;
@@ -116,36 +117,36 @@ namespace BitNow_Backend.Controllers
 
                 _logger.LogInformation("Item created successfully with ID: {ItemId}", result.Id);
 
-                // Tạo thông báo cho tất cả admin users về sản phẩm mới cần phê duyệt
+                // Tạo thông báo cho tất cả staff về sản phẩm mới cần phê duyệt
                 try
                 {
-                    _logger.LogInformation("Searching for admin users to notify about new item {ItemId}", result.Id);
+                    _logger.LogInformation("Searching for staff users to notify about new item {ItemId}", result.Id);
                     
-                    // Query trực tiếp từ UserRoles table và join với Users
-                    var adminUserIds = await _context.UserRoles
-                        .Where(ur => ur.Role.ToLower() == "admin")
+                    // Query trực tiếp từ UserRoles table và join với Users (chỉ staff)
+                    var staffUserIds = await _context.UserRoles
+                        .Where(ur => ur.Role.ToLower() == "staff")
                         .Select(ur => ur.UserId)
                         .Distinct()
                         .ToListAsync();
 
-                    _logger.LogInformation("Found {Count} admin user IDs from UserRoles table", adminUserIds.Count);
+                    _logger.LogInformation("Found {Count} staff user IDs from UserRoles table", staffUserIds.Count);
 
-                    if (adminUserIds.Count == 0)
+                    if (staffUserIds.Count == 0)
                     {
-                        _logger.LogWarning("No admin users found in UserRoles table for notification about item {ItemId}", result.Id);
+                        _logger.LogWarning("No staff users found in UserRoles table for notification about item {ItemId}", result.Id);
                     }
                     else
                     {
-                        // Lấy thông tin đầy đủ của admin users (chỉ những user active)
-                        var adminUsers = await _context.Users
-                            .Where(u => adminUserIds.Contains(u.Id) && (u.IsActive == null || u.IsActive == true))
+                        // Lấy thông tin đầy đủ của staff users (chỉ những user active)
+                        var staffUsers = await _context.Users
+                            .Where(u => staffUserIds.Contains(u.Id) && (u.IsActive == null || u.IsActive == true))
                             .ToListAsync();
 
-                        _logger.LogInformation("Found {Count} active admin users for notification about item {ItemId}", adminUsers.Count, result.Id);
+                        _logger.LogInformation("Found {Count} active staff users for notification about item {ItemId}", staffUsers.Count, result.Id);
 
-                        if (adminUsers.Count == 0)
+                        if (staffUsers.Count == 0)
                         {
-                            _logger.LogWarning("No active admin users found to notify about new item {ItemId}", result.Id);
+                            _logger.LogWarning("No active staff users found to notify about new item {ItemId}", result.Id);
                         }
 
                         // Lấy thông tin seller (người tạo sản phẩm) để lấy email
@@ -153,7 +154,7 @@ namespace BitNow_Backend.Controllers
                         var sellerEmail = seller?.Email ?? "không xác định";
 
                         var notificationCount = 0;
-                        foreach (var admin in adminUsers)
+                        foreach (var staff in staffUsers)
                         {
                             try
                             {
@@ -164,12 +165,12 @@ namespace BitNow_Backend.Controllers
                                     message = message.Substring(0, 497) + "...";
                                 }
 
-                                _logger.LogInformation("Attempting to create notification for admin {AdminId} (Email: {Email}) about new item {ItemId}", 
-                                    admin.Id, admin.Email, result.Id);
+                                _logger.LogInformation("Attempting to create notification for staff {UserId} (Email: {Email}) about new item {ItemId}", 
+                                    staff.Id, staff.Email, result.Id);
 
                                 var notificationDto = new CreateNotificationDto
                                 {
-                                    UserId = admin.Id,
+                                    UserId = staff.Id,
                                     Type = "item_pending",
                                     Message = message,
                                     Link = $"/admin?tab=pending"
@@ -178,18 +179,18 @@ namespace BitNow_Backend.Controllers
                                 var createdNotification = await _notificationService.CreateNotificationAsync(notificationDto);
 
                                 notificationCount++;
-                                _logger.LogInformation("Successfully created notification {NotificationId} for admin {AdminId} (Email: {Email}) about new item {ItemId}", 
-                                    createdNotification.Id, admin.Id, admin.Email, result.Id);
+                                _logger.LogInformation("Successfully created notification {NotificationId} for staff {UserId} (Email: {Email}) about new item {ItemId}", 
+                                    createdNotification.Id, staff.Id, staff.Email, result.Id);
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogError(ex, "Failed to create notification for admin {AdminId} (Email: {Email}) about item {ItemId}. Error: {Error}", 
-                                    admin.Id, admin.Email, result.Id, ex.ToString());
+                                _logger.LogError(ex, "Failed to create notification for staff {UserId} (Email: {Email}) about item {ItemId}. Error: {Error}", 
+                                    staff.Id, staff.Email, result.Id, ex.ToString());
                             }
                         }
 
-                        _logger.LogInformation("Successfully created {Count}/{Total} notifications for admin users about new item {ItemId}", 
-                            notificationCount, adminUsers.Count, result.Id);
+                        _logger.LogInformation("Successfully created {Count}/{Total} notifications for staff users about new item {ItemId}", 
+                            notificationCount, staffUsers.Count, result.Id);
                     }
                 }
                 catch (Exception ex)
@@ -500,7 +501,7 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Approve an item (change status to 'approved')
+        /// Approve an item (change status to 'approved') - Admin/Staff only
         /// </summary>
         /// <param name="id">Item ID</param>
         [HttpPut("{id}/approve")]
@@ -508,6 +509,14 @@ namespace BitNow_Backend.Controllers
         {
             try
             {
+                // Check authorization
+                var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+                if (string.IsNullOrEmpty(userIdHeader) || !int.TryParse(userIdHeader, out var userId))
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_context, userId, "admin", "staff"))
+                    return Forbid();
+
                 // Lấy thông tin item trước khi approve để lấy sellerId và title
                 var item = await _itemService.GetByIdAsync(id);
                 if (item == null)
@@ -567,7 +576,7 @@ namespace BitNow_Backend.Controllers
         }
 
         /// <summary>
-        /// Reject an item (change status to 'rejected')
+        /// Reject an item (change status to 'rejected') - Admin/Staff only
         /// </summary>
         /// <param name="id">Item ID</param>
         /// <param name="dto">Reject reason</param>
@@ -576,6 +585,14 @@ namespace BitNow_Backend.Controllers
         {
             try
             {
+                // Check authorization
+                var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+                if (string.IsNullOrEmpty(userIdHeader) || !int.TryParse(userIdHeader, out var userId))
+                    return Unauthorized();
+
+                if (!await RoleHelper.HasAnyRoleAsync(_context, userId, "admin", "staff"))
+                    return Forbid();
+
                 // Validate reason
                 if (string.IsNullOrWhiteSpace(dto?.Reason))
                 {
