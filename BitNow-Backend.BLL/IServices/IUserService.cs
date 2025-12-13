@@ -17,4 +17,5 @@ public interface IUserService
     Task<IEnumerable<UserResponseDto>> SearchAsync(string searchTerm, int page = 1, int pageSize = 10);
     Task<bool> AddRoleAsync(int userId, string role);
     Task<bool> RemoveRoleAsync(int userId, string role);
+    Task<string> GenerateAndSendPasswordAsync(int userId);
 }

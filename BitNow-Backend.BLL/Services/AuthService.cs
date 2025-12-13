@@ -2,6 +2,7 @@ using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.IRepositories;
 using BitNow_Backend.DAL.Models;
+using System.Linq;
 
 namespace BitNow_Backend.BLL.Services;
 
@@ -102,9 +103,37 @@ public class AuthService : IAuthService
         var user = await _userRepository.GetByEmailAsync(email);
         if (user == null) throw new InvalidOperationException("User not found");
 
-        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) throw new InvalidOperationException("Invalid password");
+        // Check account status BEFORE verifying password to show proper error message
+        if (user.IsActive != true)
+        {
+            // If user has roles, it means they were active before and now deactivated
+            // If no roles, they haven't verified email yet
+            bool hasRoles = false;
+            if (user.UserRoles != null)
+            {
+                hasRoles = user.UserRoles.Count > 0;
+            }
+            
+            if (hasRoles)
+            {
+                // User has roles but account is deactivated - this is a banned/deactivated account
+                // Always show "Account deactivated" regardless of password to prevent confusion
+                throw new InvalidOperationException("Account deactivated");
+            }
+            else
+            {
+                // User has no roles - they haven't verified email yet
+                // Still verify password to prevent account enumeration, but throw not verified error if password is correct
+                if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+                {
+                    throw new InvalidOperationException("Invalid password");
+                }
+                throw new InvalidOperationException("Email not verified");
+            }
+        }
 
-        if (user.IsActive != true) throw new InvalidOperationException("Email not verified");
+        // Account is active, verify password
+        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) throw new InvalidOperationException("Invalid password");
 
         return Map(user);
     }

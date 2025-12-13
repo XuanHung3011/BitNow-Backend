@@ -145,4 +145,79 @@ public class EmailService : IEmailService
             throw;
         }
     }
+
+    /// <summary>
+    /// Gửi email với mật khẩu mới được tạo tự động (cho admin/support cấp lại mật khẩu).
+    /// </summary>
+    public async Task SendNewPasswordEmailAsync(string toEmail, string userName, string newPassword)
+    {
+        try
+        {
+            var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("Email:FromEmail not configured");
+            var fromName = _configuration["Email:FromName"] ?? "BidNow";
+            var smtpServer = _configuration["Email:SmtpServer"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var username = _configuration["Email:Username"] ?? throw new InvalidOperationException("Email:Username not configured");
+            var password = _configuration["Email:Password"] ?? throw new InvalidOperationException("Email:Password not configured");
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(fromName, fromEmail));
+            message.To.Add(new MailboxAddress(userName, toEmail));
+            message.Subject = "Mật khẩu mới cho tài khoản BidNow";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = $@"
+                    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                        <div style='text-align: center; margin-bottom: 30px;'>
+                            <h1 style='color: #2563eb; margin: 0;'>BidNow</h1>
+                            <p style='color: #666; margin: 5px 0;'>Đấu giá thời gian thực</p>
+                        </div>
+                        
+                        <div style='background: #f8fafc; padding: 30px; border-radius: 8px; margin-bottom: 20px;'>
+                            <h2 style='color: #1f2937; margin-top: 0;'>Chào {userName}!</h2>
+                            <p style='color: #4b5563; line-height: 1.6;'>
+                                Mật khẩu mới cho tài khoản BidNow của bạn đã được tạo. 
+                                Vui lòng sử dụng mật khẩu bên dưới để đăng nhập.
+                            </p>
+                            
+                            <div style='background: #ffffff; border: 2px solid #2563eb; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;'>
+                                <p style='color: #6b7280; font-size: 14px; margin: 0 0 10px 0;'>Mật khẩu mới của bạn:</p>
+                                <p style='color: #1f2937; font-size: 24px; font-weight: bold; font-family: monospace; letter-spacing: 2px; margin: 0;'>{newPassword}</p>
+                            </div>
+                            
+                            <div style='background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;'>
+                                <p style='color: #92400e; margin: 0; font-size: 14px;'>
+                                    <strong>⚠️ Lưu ý quan trọng:</strong> Vui lòng đổi mật khẩu này ngay sau khi đăng nhập để bảo mật tài khoản của bạn.
+                                </p>
+                            </div>
+                            
+                            <p style='color: #6b7280; font-size: 14px; margin-top: 20px;'>
+                                Nếu bạn không yêu cầu mật khẩu mới, vui lòng liên hệ với bộ phận hỗ trợ ngay lập tức.
+                            </p>
+                        </div>
+                        
+                        <div style='text-align: center; color: #9ca3af; font-size: 12px;'>
+                            <p>Email này được gửi tự động, vui lòng không trả lời.</p>
+                            <p>© 2024 BidNow. Tất cả quyền được bảo lưu.</p>
+                        </div>
+                    </div>"
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            await client.ConnectAsync(smtpServer, smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(username, password);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation($"New password email sent to {toEmail}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to send new password email to {toEmail}");
+            throw;
+        }
+    }
 }

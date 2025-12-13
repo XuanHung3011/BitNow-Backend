@@ -69,8 +69,8 @@ public class UserLoginDto
 
 public class ChangePasswordDto
 {
-    [Required]
-    public string CurrentPassword { get; set; } = null!;
+    // CurrentPassword is optional for admin/support resetting password for others
+    public string? CurrentPassword { get; set; }
 
     [Required]
     [MinLength(6)]

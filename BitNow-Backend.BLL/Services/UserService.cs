@@ -1,16 +1,19 @@
 using BitNow_Backend.DAL.DTOs;
 using BitNow_Backend.DAL.Models;
 using BitNow_Backend.DAL.IRepositories;
+using BitNow_Backend.BLL.IServices;
 
 namespace BitNow_Backend.BLL.Services;
 
 public class UserService : BitNow_Backend.BLL.IServices.IUserService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IEmailService _emailService;
 
-    public UserService(IUserRepository userRepository)
+    public UserService(IUserRepository userRepository, IEmailService emailService)
     {
         _userRepository = userRepository;
+        _emailService = emailService;
     }
 
     /// <summary>
@@ -138,9 +141,13 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         var user = await _userRepository.GetByIdAsync(userId);
         if (user == null) return false;
 
-        // Verify current password with BCrypt
-        if (!BCrypt.Net.BCrypt.Verify(changePasswordDto.CurrentPassword, user.PasswordHash))
-            return false;
+        // If CurrentPassword is empty, skip verification (for admin/support reset)
+        if (!string.IsNullOrEmpty(changePasswordDto.CurrentPassword))
+        {
+            // Verify current password with BCrypt
+            if (!BCrypt.Net.BCrypt.Verify(changePasswordDto.CurrentPassword, user.PasswordHash))
+                return false;
+        }
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(changePasswordDto.NewPassword);
         await _userRepository.UpdateAsync(user);
@@ -249,5 +256,39 @@ public class UserService : BitNow_Backend.BLL.IServices.IUserService
         // Delete the UserRole entity directly from the repository
         await _userRepository.DeleteUserRoleAsync(toRemove);
         return true;
+    }
+
+    /// <summary>
+    /// Generate a random password, update user password, and send it via email.
+    /// Returns the generated password.
+    /// </summary>
+    public async Task<string> GenerateAndSendPasswordAsync(int userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null) throw new InvalidOperationException("User not found");
+
+        // Generate random password (12 characters: letters, numbers, special chars)
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+        var random = new Random();
+        var newPassword = new string(Enumerable.Repeat(chars, 12)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
+
+        // Update password
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        await _userRepository.UpdateAsync(user);
+
+        // Send email with new password
+        try
+        {
+            await _emailService.SendNewPasswordEmailAsync(user.Email, user.FullName, newPassword);
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail - password is already updated
+            // Could add logging here if needed
+            throw new InvalidOperationException($"Password generated but failed to send email: {ex.Message}");
+        }
+
+        return newPassword;
     }
 }
