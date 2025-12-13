@@ -220,4 +220,103 @@ public class EmailService : IEmailService
             throw;
         }
     }
+
+    /// <summary>
+    /// Gửi email liên hệ từ người dùng đến admin.
+    /// </summary>
+    public async Task SendContactEmailAsync(string toEmail, string name, string email, string subject, string category, string message, int? userId = null)
+    {
+        try
+        {
+            var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("Email:FromEmail not configured");
+            var fromName = _configuration["Email:FromName"] ?? "BidNow";
+            var smtpServer = _configuration["Email:SmtpServer"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var username = _configuration["Email:Username"] ?? throw new InvalidOperationException("Email:Username not configured");
+            var password = _configuration["Email:Password"] ?? throw new InvalidOperationException("Email:Password not configured");
+
+            var messageObj = new MimeMessage();
+            messageObj.From.Add(new MailboxAddress(fromName, fromEmail));
+            messageObj.To.Add(new MailboxAddress("Admin", toEmail));
+            messageObj.Subject = $"[Liên hệ BidNow] {subject}";
+
+            var categoryLabel = category switch
+            {
+                "support" => "Hỗ trợ kỹ thuật",
+                "account" => "Vấn đề tài khoản",
+                "payment" => "Thanh toán",
+                "auction" => "Phiên đấu giá",
+                "report" => "Báo cáo vi phạm",
+                "other" => "Khác",
+                _ => category
+            };
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = $@"
+                    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                        <div style='text-align: center; margin-bottom: 30px;'>
+                            <h1 style='color: #2563eb; margin: 0;'>BidNow</h1>
+                            <p style='color: #666; margin: 5px 0;'>Đấu giá thời gian thực</p>
+                        </div>
+                        
+                        <div style='background: #f8fafc; padding: 30px; border-radius: 8px; margin-bottom: 20px;'>
+                            <h2 style='color: #1f2937; margin-top: 0;'>Tin nhắn liên hệ mới</h2>
+                            
+                            <div style='background: #ffffff; padding: 20px; border-radius: 6px; margin: 20px 0;'>
+                                <table style='width: 100%; border-collapse: collapse;'>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #6b7280; font-weight: bold; width: 120px;'>Họ và tên:</td>
+                                        <td style='padding: 8px 0; color: #1f2937;'>{name}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #6b7280; font-weight: bold;'>Email:</td>
+                                        <td style='padding: 8px 0; color: #1f2937;'>{email}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #6b7280; font-weight: bold;'>Danh mục:</td>
+                                        <td style='padding: 8px 0; color: #1f2937;'>{categoryLabel}</td>
+                                    </tr>
+                                    {(userId.HasValue ? $@"
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #6b7280; font-weight: bold;'>User ID:</td>
+                                        <td style='padding: 8px 0; color: #1f2937;'>{userId.Value}</td>
+                                    </tr>
+                                    " : @"
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #6b7280; font-weight: bold;'>Trạng thái:</td>
+                                        <td style='padding: 8px 0; color: #f59e0b;'>Khách (chưa đăng nhập)</td>
+                                    </tr>
+                                    ")}
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #6b7280; font-weight: bold; vertical-align: top;'>Nội dung:</td>
+                                        <td style='padding: 8px 0; color: #1f2937; white-space: pre-wrap;'>{message}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div style='text-align: center; color: #9ca3af; font-size: 12px;'>
+                            <p>Email này được gửi tự động từ form liên hệ BidNow.</p>
+                            <p>© 2024 BidNow. Tất cả quyền được bảo lưu.</p>
+                        </div>
+                    </div>"
+            };
+
+            messageObj.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            await client.ConnectAsync(smtpServer, smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(username, password);
+            await client.SendAsync(messageObj);
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation($"Contact email sent to {toEmail} from {name} ({email})");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to send contact email to {toEmail}");
+            throw;
+        }
+    }
 }
