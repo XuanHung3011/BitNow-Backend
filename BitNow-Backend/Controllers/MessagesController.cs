@@ -35,11 +35,24 @@ namespace BitNow_Backend.Controllers
                 if (message == null)
                     return BadRequest("Failed to send message");
 
-                // Broadcasting realtime to both sender and receiver groups
-                await _hubContext.Clients.Group($"user-{message.SenderId}")
-                    .SendAsync("MessageReceived", message);
-                await _hubContext.Clients.Group($"user-{message.ReceiverId}")
-                    .SendAsync("MessageReceived", message);
+                // CRITICAL FIX: For dispute chat messages (DisputeId != null), don't broadcast to sender
+                // because in dispute chat, we send to multiple recipients, creating multiple message records
+                // Broadcasting to sender would cause duplicate messages in the UI
+                // The sender already knows they sent the message, so they don't need the SignalR broadcast
+                if (message.DisputeId.HasValue)
+                {
+                    // Only broadcast to receiver (not sender) for dispute chat messages
+                    await _hubContext.Clients.Group($"user-{message.ReceiverId}")
+                        .SendAsync("MessageReceived", message);
+                }
+                else
+                {
+                    // For regular 1-1 messages, broadcast to both sender and receiver
+                    await _hubContext.Clients.Group($"user-{message.SenderId}")
+                        .SendAsync("MessageReceived", message);
+                    await _hubContext.Clients.Group($"user-{message.ReceiverId}")
+                        .SendAsync("MessageReceived", message);
+                }
 
                 return Ok(message);
             }
@@ -79,11 +92,22 @@ namespace BitNow_Backend.Controllers
         public async Task<ActionResult<IEnumerable<MessageResponseDto>>> GetConversation(
             [FromQuery] int userId1,
             [FromQuery] int userId2,
-            [FromQuery] int? auctionId = null)
+            [FromQuery] int? auctionId = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null)
         {
             try
             {
-                var messages = await _messageService.GetConversationAsync(userId1, userId2, auctionId);
+                // Verify that the current user is one of the participants
+                var currentUserId = GetCurrentUserId();
+                if (currentUserId == null)
+                    return Unauthorized(new { message = "User not authenticated" });
+
+                // User must be either userId1 or userId2 to view this conversation
+                if (currentUserId != userId1 && currentUserId != userId2)
+                    return Unauthorized(new { message = "You can only view conversations you are part of" });
+
+                var messages = await _messageService.GetConversationAsync(userId1, userId2, auctionId, fromDate, toDate);
                 return Ok(messages);
             }
             catch (Exception ex)
@@ -91,6 +115,22 @@ namespace BitNow_Backend.Controllers
                 _logger.LogError(ex, "Error getting conversation between user {UserId1} and {UserId2}", userId1, userId2);
                 return StatusCode(500, new { message = "Internal server error" });
             }
+        }
+
+        private int? GetCurrentUserId()
+        {
+            // Try to get from header first (custom authentication)
+            var userIdHeader = Request.Headers["X-User-Id"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(userIdHeader) && int.TryParse(userIdHeader, out var userId))
+            {
+                return userId;
+            }
+
+            // Fallback: try to get from User claims if available
+            var userIdClaim = User.FindFirst("userId")?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out userId))
+                return null;
+            return userId;
         }
 
         /// <summary>
@@ -146,6 +186,36 @@ namespace BitNow_Backend.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting all messages for user {UserId}", userId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        /// <summary>
+        /// Lấy tin nhắn của dispute chat (chỉ messages trong time window của dispute)
+        /// </summary>
+        [HttpGet("dispute/{disputeId}")]
+        public async Task<ActionResult<IEnumerable<MessageResponseDto>>> GetDisputeMessages(int disputeId)
+        {
+            try
+            {
+                var currentUserId = GetCurrentUserId();
+                if (currentUserId == null)
+                    return Unauthorized(new { message = "User not authenticated" });
+
+                var messages = await _messageService.GetDisputeMessagesAsync(disputeId, currentUserId.Value);
+                return Ok(messages);
+            }
+            catch (ArgumentException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting dispute messages for dispute {DisputeId}", disputeId);
                 return StatusCode(500, new { message = "Internal server error" });
             }
         }
