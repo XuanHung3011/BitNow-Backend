@@ -45,6 +45,17 @@ namespace BitNow_Backend.DAL.Repositories
                 );
             }
 
+            // Filter by category
+            if (filter.CategoryId.HasValue && filter.CategoryId.Value > 0)
+            {
+                query = query.Where(a => a.Item != null && a.Item.CategoryId == filter.CategoryId.Value);
+            }
+
+            // Only show auctions with approved items (or archived items that have active auctions)
+            query = query.Where(a => a.Item != null && 
+                (a.Item.Status == "approved" || 
+                 (a.Item.Status == "archived" && a.EndTime > now)));
+
             // Filter by status - filter based on actual time, not just Status field
             if (filter.Statuses != null && filter.Statuses.Any())
             {
@@ -59,6 +70,19 @@ namespace BitNow_Backend.DAL.Repositories
                         (a.Status != null && a.Status.ToLower() == "completed"))) ||
                     (normalizedStatuses.Contains("paused") && a.Status != null && a.Status.ToLower() == "paused") ||
                     (normalizedStatuses.Contains("cancelled") && a.Status != null && a.Status.ToLower() == "cancelled")
+                );
+            }
+            else
+            {
+                // By default, exclude completed and cancelled auctions unless explicitly requested
+                // Only show active, scheduled, and paused auctions
+                query = query.Where(a =>
+                    a.Status != null &&
+                    a.Status.ToLower() != "completed" &&
+                    a.Status.ToLower() != "cancelled" &&
+                    a.Status.ToLower() != "canceled" &&
+                    // Also exclude ended auctions based on time
+                    a.EndTime > now
                 );
             }
 

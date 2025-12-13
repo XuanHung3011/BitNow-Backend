@@ -357,7 +357,9 @@ public class UsersController : ControllerBase
     public class AddRoleRequest { public string Role { get; set; } = string.Empty; }
 
     /// <summary>
-    /// Add a role to user (buyer/seller/admin/staff/support) - Admin only
+    /// Add a role to user (buyer/seller/admin/staff/support)
+    /// - Admin can add any role to any user
+    /// - Users can add "seller" role to themselves
     /// </summary>
     [HttpPost("{id}/roles")]
     public async Task<ActionResult> AddRole(int id, [FromBody] AddRoleRequest body)
@@ -368,17 +370,27 @@ public class UsersController : ControllerBase
             if (currentUserId == null)
                 return Unauthorized();
 
-            // Check if user is admin
-            if (!await RoleHelper.IsAdminAsync(_dbContext, currentUserId))
-                return Forbid();
-
             if (body == null || string.IsNullOrWhiteSpace(body.Role))
                 return BadRequest(new { message = "role is required" });
 
             // Validate role name
             var validRoles = new[] { "buyer", "seller", "admin", "staff", "support" };
-            if (!validRoles.Contains(body.Role.ToLower()))
+            var roleLower = body.Role.ToLower();
+            if (!validRoles.Contains(roleLower))
                 return BadRequest(new { message = $"Invalid role. Valid roles are: {string.Join(", ", validRoles)}" });
+
+            // Check permissions
+            var isAdmin = await RoleHelper.IsAdminAsync(_dbContext, currentUserId);
+            
+            // If not admin, user can only add "seller" role to themselves
+            if (!isAdmin)
+            {
+                if (id != currentUserId)
+                    return Forbid(); // Users can only modify their own roles
+                
+                if (roleLower != "seller")
+                    return Forbid(); // Users can only add "seller" role to themselves
+            }
 
             var ok = await _userService.AddRoleAsync(id, body.Role);
             if (!ok) return BadRequest(new { message = "cannot add role" });

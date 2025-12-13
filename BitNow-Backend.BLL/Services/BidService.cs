@@ -168,26 +168,28 @@ namespace BitNow_Backend.BLL.Services
 				}
 			}
 
-			// Xử lý auto bid sau khi đặt giá thành công (chỉ khi không phải auto bid)
-			if (!isAutoBid)
+			// Xử lý auto bid sau khi đặt giá thành công (cho cả manual và auto bid)
+			// CRITICAL: Cần trigger auto bid processing cả khi auto bid đặt giá
+			// để các auto bid khác có thể tiếp tục đấu giá với nhau
+			// Logic trong ProcessAutoBidsAfterBidAsync đã có check để tránh infinite loop:
+			// - Skip người vừa đặt giá (currentBidderId)
+			// - Reload auction mỗi lần để lấy giá mới nhất
+			// - Chỉ đặt giá nếu giá mới > giá hiện tại
+			_ = Task.Run(async () =>
 			{
-				// Chạy async để không block response, tạo scope mới để tránh vấn đề với DbContext
-				_ = Task.Run(async () =>
+				try
 				{
-					try
-					{
-						using var scope = _serviceScopeFactory.CreateScope();
-						var autoBidService = scope.ServiceProvider.GetRequiredService<IAutoBidService>();
-						await autoBidService.ProcessAutoBidsAfterBidAsync(auctionId, bidderId, amount);
-					}
-					catch (Exception ex)
-					{
-						// Log error để debug
-						System.Diagnostics.Debug.WriteLine($"Auto bid processing error: {ex.Message}");
-						System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-					}
-				});
-			}
+					using var scope = _serviceScopeFactory.CreateScope();
+					var autoBidService = scope.ServiceProvider.GetRequiredService<IAutoBidService>();
+					await autoBidService.ProcessAutoBidsAfterBidAsync(auctionId, bidderId, amount);
+				}
+				catch (Exception ex)
+				{
+					// Log error để debug
+					System.Diagnostics.Debug.WriteLine($"Auto bid processing error: {ex.Message}");
+					System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+				}
+			});
 
 			return result;
 		}

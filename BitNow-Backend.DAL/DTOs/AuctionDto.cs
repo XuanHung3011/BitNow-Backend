@@ -49,6 +49,7 @@ namespace BitNow_Backend.DAL.DTOs
 	{
 		public string? SearchTerm { get; set; }
 		public List<string>? Statuses { get; set; } // active, scheduled, completed, paused
+		public int? CategoryId { get; set; } // Filter by category
 		public string? SortBy { get; set; } = "EndTime"; // ItemTitle, EndTime, CurrentBid, BidCount
 		public string? SortOrder { get; set; } = "desc"; // asc, desc
 		public int Page { get; set; } = 1;
