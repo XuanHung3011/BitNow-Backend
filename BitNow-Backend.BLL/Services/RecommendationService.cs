@@ -59,10 +59,24 @@ namespace BitNow_Backend.BLL.Services
             var watchlistItems = (await _watchlistService.GetByUserAsync(userId)).Take(20).ToList();
             var searchKeywords = await _searchKeywordService.GetRecentKeywordsAsync(userId, 20);
             var viewedAuctionIds = await _userAuctionViewService.GetRecentViewedAuctionIdsAsync(userId, 20, cancellationToken);
-            var viewedItems = viewedAuctionIds.Any()
-                ? await _auctionService.GetItemsByAuctionIdsAsync(viewedAuctionIds.ToHashSet())
-                : Enumerable.Empty<ItemResponseDto>();
 
+            IEnumerable<ItemResponseDto> viewedItems = Enumerable.Empty<ItemResponseDto>();
+
+            if (viewedAuctionIds.Any())
+            {
+
+                var uniqueAuctionIds = viewedAuctionIds.ToHashSet();
+                var viewedItemsFromDb = await _auctionService.GetItemsByAuctionIdsAsync(uniqueAuctionIds); 
+
+
+                var itemDict = viewedItemsFromDb.ToDictionary(i => i.AuctionId!.Value);
+
+
+                viewedItems = viewedAuctionIds
+                    .Where(id => itemDict.ContainsKey(id))
+                    .Select(id => itemDict[id])
+                    .ToList();
+            }
             var hasUserData = biddingHistory.Data.Any() || watchlistItems.Any() || searchKeywords.Any() || viewedAuctionIds.Any();
 
             // Fallback cho new users
