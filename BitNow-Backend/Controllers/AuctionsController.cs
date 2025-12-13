@@ -299,6 +299,7 @@ namespace BitNow_Backend.Controllers
         /// </summary>
         /// <param name="searchTerm">Search by item title or seller name</param>
         /// <param name="statuses">Filter by status: 'active', 'scheduled', 'completed', 'cancelled' (comma-separated for multiple)</param>
+        /// <param name="categoryId">Filter by category ID</param>
         /// <param name="sortBy">Sort by: 'ItemTitle', 'EndTime', 'CurrentBid', 'BidCount' (default: 'EndTime')</param>
         /// <param name="sortOrder">Sort order: 'asc' or 'desc' (default: 'desc')</param>
         /// <param name="page">Page number (default: 1)</param>
@@ -307,6 +308,7 @@ namespace BitNow_Backend.Controllers
         public async Task<ActionResult<PaginatedResult<AuctionListItemDto>>> GetAllAuctions(
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? statuses = null,
+            [FromQuery] int? categoryId = null,
             [FromQuery] string? sortBy = "EndTime",
             [FromQuery] string? sortOrder = "desc",
             [FromQuery] int page = 1,
@@ -356,6 +358,7 @@ namespace BitNow_Backend.Controllers
                 {
                     SearchTerm = searchTerm,
                     Statuses = statusList,
+                    CategoryId = categoryId,
                     SortBy = sortBy,
                     SortOrder = sortOrder,
                     Page = page,
