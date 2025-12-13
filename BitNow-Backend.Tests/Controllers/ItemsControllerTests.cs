@@ -444,6 +444,32 @@ public class ItemsControllerTests
     public async Task ApproveItem_WithValidId_ReturnsOk()
     {
         // Arrange
+        var userId = 1;
+        var headersMock = new Mock<IHeaderDictionary>();
+        var headerValues = new Microsoft.Extensions.Primitives.StringValues(userId.ToString());
+        headersMock.Setup(x => x["X-User-Id"]).Returns(headerValues);
+        headersMock.Setup(x => x.GetEnumerator()).Returns(new List<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>().GetEnumerator());
+        
+        var requestMock = new Mock<HttpRequest>();
+        requestMock.Setup(x => x.Headers).Returns(headersMock.Object);
+        
+        var httpContextMock = new Mock<HttpContext>();
+        httpContextMock.Setup(x => x.Request).Returns(requestMock.Object);
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContextMock.Object };
+        
+        var userRole = new UserRole { Id = 1, UserId = userId, Role = "admin" };
+        var user = new User 
+        { 
+            Id = userId, 
+            Email = "admin@test.com",
+            UserRoles = new List<UserRole> { userRole }
+        };
+        userRole.User = user;
+        var users = new List<User> { user };
+        var userRoles = new List<UserRole> { userRole };
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
         var item = new ItemResponseDto
         {
             Id = 1,
@@ -492,6 +518,32 @@ public class ItemsControllerTests
     public async Task ApproveItem_WhenNotFound_ReturnsNotFound()
     {
         // Arrange
+        var userId = 1;
+        var headersMock = new Mock<IHeaderDictionary>();
+        var headerValues = new Microsoft.Extensions.Primitives.StringValues(userId.ToString());
+        headersMock.Setup(x => x["X-User-Id"]).Returns(headerValues);
+        headersMock.Setup(x => x.GetEnumerator()).Returns(new List<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>().GetEnumerator());
+        
+        var requestMock = new Mock<HttpRequest>();
+        requestMock.Setup(x => x.Headers).Returns(headersMock.Object);
+        
+        var httpContextMock = new Mock<HttpContext>();
+        httpContextMock.Setup(x => x.Request).Returns(requestMock.Object);
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContextMock.Object };
+        
+        var userRole = new UserRole { Id = 1, UserId = userId, Role = "admin" };
+        var user = new User 
+        { 
+            Id = userId, 
+            Email = "admin@test.com",
+            UserRoles = new List<UserRole> { userRole }
+        };
+        userRole.User = user;
+        var users = new List<User> { user };
+        var userRoles = new List<UserRole> { userRole };
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
         _itemServiceMock.Setup(x => x.GetByIdAsync(999))
             .ReturnsAsync((ItemResponseDto?)null);
 
@@ -519,6 +571,32 @@ public class ItemsControllerTests
     public async Task RejectItem_WithValidData_ReturnsOk()
     {
         // Arrange
+        var userId = 1;
+        var headersMock = new Mock<IHeaderDictionary>();
+        var headerValues = new Microsoft.Extensions.Primitives.StringValues(userId.ToString());
+        headersMock.Setup(x => x["X-User-Id"]).Returns(headerValues);
+        headersMock.Setup(x => x.GetEnumerator()).Returns(new List<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>().GetEnumerator());
+        
+        var requestMock = new Mock<HttpRequest>();
+        requestMock.Setup(x => x.Headers).Returns(headersMock.Object);
+        
+        var httpContextMock = new Mock<HttpContext>();
+        httpContextMock.Setup(x => x.Request).Returns(requestMock.Object);
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContextMock.Object };
+        
+        var userRole = new UserRole { Id = 1, UserId = userId, Role = "admin" };
+        var user = new User 
+        { 
+            Id = userId, 
+            Email = "admin@test.com",
+            UserRoles = new List<UserRole> { userRole }
+        };
+        userRole.User = user;
+        var users = new List<User> { user };
+        var userRoles = new List<UserRole> { userRole };
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
         var item = new ItemResponseDto
         {
             Id = 1,
@@ -569,6 +647,32 @@ public class ItemsControllerTests
     public async Task RejectItem_WithEmptyReason_ReturnsBadRequest()
     {
         // Arrange
+        var userId = 1;
+        var headersMock = new Mock<IHeaderDictionary>();
+        var headerValues = new Microsoft.Extensions.Primitives.StringValues(userId.ToString());
+        headersMock.Setup(x => x["X-User-Id"]).Returns(headerValues);
+        headersMock.Setup(x => x.GetEnumerator()).Returns(new List<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>().GetEnumerator());
+        
+        var requestMock = new Mock<HttpRequest>();
+        requestMock.Setup(x => x.Headers).Returns(headersMock.Object);
+        
+        var httpContextMock = new Mock<HttpContext>();
+        httpContextMock.Setup(x => x.Request).Returns(requestMock.Object);
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContextMock.Object };
+        
+        var userRole = new UserRole { Id = 1, UserId = userId, Role = "admin" };
+        var user = new User 
+        { 
+            Id = userId, 
+            Email = "admin@test.com",
+            UserRoles = new List<UserRole> { userRole }
+        };
+        userRole.User = user;
+        var users = new List<User> { user };
+        var userRoles = new List<UserRole> { userRole };
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
         var rejectDto = new RejectItemDto { Reason = "" };
 
         // Act

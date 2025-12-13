@@ -1,21 +1,57 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.Controllers;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.DAL.Models;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Primitives;
 using Moq;
+using Moq.EntityFrameworkCore;
 
 namespace BitNow_Backend.Tests.Controllers;
 
 public class CategoriesControllerTests
 {
     private readonly Mock<ICategoryService> _categoryServiceMock;
+    private readonly Mock<BidNowDbContext> _dbContextMock;
     private readonly CategoriesController _controller;
 
     public CategoriesControllerTests()
     {
         _categoryServiceMock = new Mock<ICategoryService>();
-        _controller = new CategoriesController(_categoryServiceMock.Object);
+        _dbContextMock = new Mock<BidNowDbContext>();
+        _controller = new CategoriesController(_categoryServiceMock.Object, _dbContextMock.Object);
+    }
+
+    private void SetupHttpContext(int userId)
+    {
+        // Use DefaultHttpContext which properly initializes Request
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-User-Id"] = userId.ToString();
+        
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+    }
+
+    private void SetupDbContextForRoleCheck(int userId, string roleName)
+    {
+        var userRole = new UserRole { Id = 1, UserId = userId, Role = roleName };
+        var user = new User 
+        { 
+            Id = userId, 
+            Email = $"{roleName}@test.com",
+            UserRoles = new List<UserRole> { userRole }
+        };
+        userRole.User = user;
+        var users = new List<User> { user };
+        var userRoles = new List<UserRole> { userRole };
+        
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
     }
 
     /// <summary>
@@ -149,6 +185,12 @@ public class CategoriesControllerTests
     public async Task CreateCategory_WithValidData_ReturnsCreated()
     {
         // Arrange
+        var userId = 1;
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-User-Id"] = userId.ToString();
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var createDto = new CreateCategoryDtos
         {
             Name = "Electronics",
@@ -189,6 +231,10 @@ public class CategoriesControllerTests
     public async Task CreateCategory_WithDuplicateSlug_ReturnsConflict()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var createDto = new CreateCategoryDtos
         {
             Name = "Electronics",
@@ -218,6 +264,10 @@ public class CategoriesControllerTests
     public async Task UpdateCategory_WithValidData_ReturnsOk()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var updateDto = new UpdateCategoryDtos
         {
             Name = "Updated Electronics",
@@ -258,6 +308,10 @@ public class CategoriesControllerTests
     public async Task UpdateCategory_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var updateDto = new UpdateCategoryDtos
         {
             Name = "Updated Electronics",
@@ -287,6 +341,10 @@ public class CategoriesControllerTests
     public async Task DeleteCategory_WithValidId_ReturnsNoContent()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         _categoryServiceMock.Setup(x => x.DeleteCategoryAsync(1))
             .ReturnsAsync(true);
 
@@ -310,6 +368,10 @@ public class CategoriesControllerTests
     public async Task DeleteCategory_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         _categoryServiceMock.Setup(x => x.DeleteCategoryAsync(999))
             .ReturnsAsync(false);
 
@@ -333,6 +395,10 @@ public class CategoriesControllerTests
     public async Task DeleteCategory_WithCategoryInUse_ReturnsConflict()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         _categoryServiceMock.Setup(x => x.DeleteCategoryAsync(1))
             .ThrowsAsync(new InvalidOperationException("Category is in use"));
 

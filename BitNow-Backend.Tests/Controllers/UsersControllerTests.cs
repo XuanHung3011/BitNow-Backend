@@ -1,11 +1,16 @@
 using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.Controllers;
+using BitNow_Backend.DAL;
 using BitNow_Backend.DAL.DTOs;
+using BitNow_Backend.DAL.Models;
 using BitNow_Backend.Services;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 using Moq;
+using Moq.EntityFrameworkCore;
 
 namespace BitNow_Backend.Tests.Controllers;
 
@@ -14,6 +19,7 @@ public class UsersControllerTests
     private readonly Mock<IUserService> _userServiceMock;
     private readonly Mock<ILogger<UsersController>> _loggerMock;
     private readonly Mock<IFileUploadService> _fileUploadServiceMock;
+    private readonly Mock<BidNowDbContext> _dbContextMock;
     private readonly UsersController _controller;
 
     public UsersControllerTests()
@@ -21,7 +27,45 @@ public class UsersControllerTests
         _userServiceMock = new Mock<IUserService>();
         _loggerMock = new Mock<ILogger<UsersController>>();
         _fileUploadServiceMock = new Mock<IFileUploadService>();
-        _controller = new UsersController(_userServiceMock.Object, _loggerMock.Object, _fileUploadServiceMock.Object);
+        _dbContextMock = new Mock<BidNowDbContext>();
+        _controller = new UsersController(_userServiceMock.Object, _loggerMock.Object, _fileUploadServiceMock.Object, _dbContextMock.Object);
+    }
+
+    private void SetupHttpContext(int userId)
+    {
+        // Use DefaultHttpContext which properly initializes Request
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-User-Id"] = userId.ToString();
+        
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+    }
+
+    private void SetupDbContextForRoleCheck(int userId, string roleName)
+    {
+        var userRole = new UserRole { Id = 1, UserId = userId, Role = roleName };
+        var user = new User 
+        { 
+            Id = userId, 
+            Email = $"{roleName}@test.com",
+            UserRoles = new List<UserRole> { userRole }
+        };
+        userRole.User = user;
+        var users = new List<User> { user };
+        var userRoles = new List<UserRole> { userRole };
+        
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
+        // Setup FirstOrDefaultAsync for Users with Include support
+        // Since ReturnsDbSet doesn't support Include, we need to setup the query directly
+        _dbContextMock.Setup(x => x.Users)
+            .ReturnsDbSet(users);
+        
+        // For queries with Include, we need to ensure the User already has UserRoles populated
+        // The ReturnsDbSet should return users with UserRoles already loaded
     }
 
     /// <summary>
@@ -223,6 +267,10 @@ public class UsersControllerTests
     public async Task UpdateUser_WithValidData_ReturnsOk()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var updateDto = new UserUpdateDto
         {
             FullName = "Updated Name",
@@ -262,6 +310,10 @@ public class UsersControllerTests
     public async Task UpdateUser_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var updateDto = new UserUpdateDto
         {
             FullName = "Updated Name"
@@ -290,6 +342,10 @@ public class UsersControllerTests
     public async Task ChangePassword_WithValidData_ReturnsOk()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var changePasswordDto = new ChangePasswordDto
         {
             CurrentPassword = "OldPassword123",
@@ -329,6 +385,10 @@ public class UsersControllerTests
     public async Task ChangePassword_WithInvalidCurrentPassword_ReturnsUnauthorized()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var changePasswordDto = new ChangePasswordDto
         {
             CurrentPassword = "WrongPassword",
@@ -366,11 +426,44 @@ public class UsersControllerTests
     public async Task ActivateUser_WithValidId_ReturnsOk()
     {
         // Arrange
-        _userServiceMock.Setup(x => x.ActivateUserAsync(1))
+        var adminUserId = 1; // Admin user who will activate
+        var targetUserId = 2; // Target user to be activated (buyer/seller)
+        
+        SetupHttpContext(adminUserId);
+        
+        // Setup admin user with UserRoles - CRITICAL: UserRoles must be populated BEFORE ReturnsDbSet
+        var adminUserRole = new UserRole { Id = 1, UserId = adminUserId, Role = "admin" };
+        var adminUser = new User 
+        { 
+            Id = adminUserId, 
+            Email = "admin@test.com"
+        };
+        adminUser.UserRoles = new List<UserRole> { adminUserRole };
+        adminUserRole.User = adminUser;
+        
+        // Setup target user (buyer) with UserRoles - CRITICAL: UserRoles must be populated BEFORE ReturnsDbSet
+        var targetUserRole = new UserRole { Id = 2, UserId = targetUserId, Role = "buyer" };
+        var targetUser = new User 
+        { 
+            Id = targetUserId, 
+            Email = "buyer@test.com"
+        };
+        targetUser.UserRoles = new List<UserRole> { targetUserRole };
+        targetUserRole.User = targetUser;
+        
+        // Setup Users DbSet with both users
+        // ReturnsDbSet will return users with UserRoles already populated
+        var users = new List<User> { adminUser, targetUser };
+        var userRoles = new List<UserRole> { adminUserRole, targetUserRole };
+        
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
+        _userServiceMock.Setup(x => x.ActivateUserAsync(targetUserId))
             .ReturnsAsync(true);
 
         // Act
-        var result = await _controller.ActivateUser(1);
+        var result = await _controller.ActivateUser(targetUserId);
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
@@ -389,11 +482,44 @@ public class UsersControllerTests
     public async Task DeactivateUser_WithValidId_ReturnsOk()
     {
         // Arrange
-        _userServiceMock.Setup(x => x.DeactivateUserAsync(1))
+        var adminUserId = 1; // Admin user who will deactivate
+        var targetUserId = 2; // Target user to be deactivated (buyer/seller)
+        
+        SetupHttpContext(adminUserId);
+        
+        // Setup admin user with UserRoles - CRITICAL: UserRoles must be populated BEFORE ReturnsDbSet
+        var adminUserRole = new UserRole { Id = 1, UserId = adminUserId, Role = "admin" };
+        var adminUser = new User 
+        { 
+            Id = adminUserId, 
+            Email = "admin@test.com"
+        };
+        adminUser.UserRoles = new List<UserRole> { adminUserRole };
+        adminUserRole.User = adminUser;
+        
+        // Setup target user (buyer) with UserRoles - CRITICAL: UserRoles must be populated BEFORE ReturnsDbSet
+        var targetUserRole = new UserRole { Id = 2, UserId = targetUserId, Role = "buyer" };
+        var targetUser = new User 
+        { 
+            Id = targetUserId, 
+            Email = "buyer@test.com"
+        };
+        targetUser.UserRoles = new List<UserRole> { targetUserRole };
+        targetUserRole.User = targetUser;
+        
+        // Setup Users DbSet with both users
+        // ReturnsDbSet will return users with UserRoles already populated
+        var users = new List<User> { adminUser, targetUser };
+        var userRoles = new List<UserRole> { adminUserRole, targetUserRole };
+        
+        _dbContextMock.Setup(x => x.Users).ReturnsDbSet(users);
+        _dbContextMock.Setup(x => x.UserRoles).ReturnsDbSet(userRoles);
+        
+        _userServiceMock.Setup(x => x.DeactivateUserAsync(targetUserId))
             .ReturnsAsync(true);
 
         // Act
-        var result = await _controller.DeactivateUser(1);
+        var result = await _controller.DeactivateUser(targetUserId);
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
@@ -412,6 +538,10 @@ public class UsersControllerTests
     public async Task AddRole_WithValidData_ReturnsOk()
     {
         // Arrange
+        var userId = 1;
+        SetupHttpContext(userId);
+        SetupDbContextForRoleCheck(userId, "admin");
+        
         var request = new UsersController.AddRoleRequest { Role = "admin" };
 
         _userServiceMock.Setup(x => x.AddRoleAsync(1, "admin"))
