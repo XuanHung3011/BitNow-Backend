@@ -7,6 +7,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public int SenderId { get; set; }
 		public int ReceiverId { get; set; }
 		public int? AuctionId { get; set; }
+		public int? DisputeId { get; set; }
 		public string Content { get; set; } = null!;
 	}
 
@@ -21,6 +22,7 @@ namespace BitNow_Backend.DAL.DTOs
 		public string? ReceiverAvatarUrl { get; set; }
 		public int? AuctionId { get; set; }
 		public string? AuctionTitle { get; set; }
+		public int? DisputeId { get; set; }
 		public string Content { get; set; } = null!;
 		public bool IsRead { get; set; }
 		public DateTime? SentAt { get; set; }

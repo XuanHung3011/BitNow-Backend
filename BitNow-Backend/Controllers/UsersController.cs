@@ -130,7 +130,7 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    /// Update user (Admin/Support only)
+    /// Update user (Admin/Support only, or user updating their own profile)
     /// </summary>
     [HttpPut("{id}")]
     public async Task<ActionResult<UserResponseDto>> UpdateUser(int id, [FromBody] UserUpdateDto userDto)
@@ -141,8 +141,9 @@ public class UsersController : ControllerBase
             if (currentUserId == null)
                 return Unauthorized();
 
-            // Check if user is admin or support
-            if (!await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "support"))
+            // Allow if user is updating their own profile, or if user is admin/support
+            var isAdminOrSupport = await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "admin", "support");
+            if (currentUserId != id && !isAdminOrSupport)
                 return Forbid();
 
             if (!ModelState.IsValid)
@@ -213,6 +214,37 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Generate and send new password via email (Support only)
+    /// </summary>
+    [HttpPost("{id}/generate-password")]
+    public async Task<ActionResult> GenerateAndSendPassword(int id)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+                return Unauthorized();
+
+            // Check if user is support
+            if (!await RoleHelper.HasAnyRoleAsync(_dbContext, currentUserId, "support"))
+                return Forbid();
+
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = "Không tìm thấy người dùng" });
+
+            var newPassword = await _userService.GenerateAndSendPasswordAsync(id);
+
+            return Ok(new { message = "Đã tạo mật khẩu mới và gửi qua email thành công", password = newPassword });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating and sending password for user {UserId}", id);
+            return StatusCode(500, new { message = $"Lỗi server: {ex.Message}" });
+        }
+    }
+
+    /// <summary>
     /// Change user password (Admin/Support only, or user changing their own password)
     /// </summary>
     [HttpPut("{id}/change-password")]
@@ -246,7 +278,7 @@ public class UsersController : ControllerBase
                 // Admin/Support can change password without current password
                 var result = await _userService.ChangePasswordAsync(id, new ChangePasswordDto
                 {
-                    CurrentPassword = changePasswordDto.CurrentPassword, // May be empty for admin/support
+                    CurrentPassword = "", // Empty for admin/support
                     NewPassword = changePasswordDto.NewPassword
                 });
                 if (!result)
@@ -255,6 +287,9 @@ public class UsersController : ControllerBase
             else
             {
                 // User changing their own password - verify current password
+                if (string.IsNullOrEmpty(changePasswordDto.CurrentPassword))
+                    return BadRequest(new { message = "Mật khẩu hiện tại là bắt buộc" });
+
                 if (!await _userService.ValidateCredentialsAsync(user.Email, changePasswordDto.CurrentPassword))
                     return Unauthorized(new { message = "Mật khẩu hiện tại không đúng" });
 

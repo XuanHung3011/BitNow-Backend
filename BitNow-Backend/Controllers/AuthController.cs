@@ -57,13 +57,15 @@ public class AuthController : ControllerBase
                 return Unauthorized("Mật khẩu không đúng");
             else if (ex.Message == "Email not verified")
                 return Forbid("Email chưa được xác minh");
+            else if (ex.Message == "Account deactivated")
+                return Forbid("Tài khoản đã bị khóa");
             else
                 return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Login error");
-            return StatusCode(500, "Internal server error");
+            _logger.LogError(ex, "Login error: {Message}, StackTrace: {StackTrace}", ex.Message, ex.StackTrace);
+            return StatusCode(500, new { message = $"Internal server error: {ex.Message}" });
         }
     }
 

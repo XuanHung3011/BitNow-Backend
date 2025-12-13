@@ -84,6 +84,7 @@ namespace BitNow_Backend.BLL.Services
 			var message = new Message
 			{
 				AuctionId = request.AuctionId,
+				DisputeId = null, // CRITICAL: Auction chat messages should never have DisputeId
 				SenderId = request.SenderId,
 				ReceiverId = receiverId,
 				Content = trimmedContent,

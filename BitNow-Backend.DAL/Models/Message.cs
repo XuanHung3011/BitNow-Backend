@@ -13,6 +13,8 @@ public partial class Message
 
     public int? AuctionId { get; set; }
 
+    public int? DisputeId { get; set; }
+
     public string Content { get; set; } = null!;
 
     public bool? IsRead { get; set; }
@@ -20,6 +22,7 @@ public partial class Message
     public DateTime? SentAt { get; set; }
 
     public virtual Auction? Auction { get; set; }
+    public virtual Dispute? Dispute { get; set; }
 
     public virtual User Receiver { get; set; } = null!;
 
