@@ -2,6 +2,7 @@ using BitNow_Backend.BLL.IServices;
 using BitNow_Backend.Controllers;
 using BitNow_Backend.DAL.DTOs;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,18 @@ public class MessagesControllerTests
             _messageServiceMock.Object,
             _loggerMock.Object,
             _hubContextMock.Object);
+    }
+
+    private void SetupHttpContext(int userId)
+    {
+        // Use DefaultHttpContext which properly initializes Request
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-User-Id"] = userId.ToString();
+        
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
     }
 
     #region SendMessage Tests
@@ -307,6 +320,10 @@ public class MessagesControllerTests
         // Arrange
         var userId1 = 1;
         var userId2 = 2;
+        
+        // Setup HttpContext with userId1 as current user (must be one of the participants)
+        SetupHttpContext(userId1);
+        
         var expectedMessages = new List<MessageResponseDto>
         {
             new MessageResponseDto
@@ -327,7 +344,7 @@ public class MessagesControllerTests
             }
         };
 
-        _messageServiceMock.Setup(x => x.GetConversationAsync(userId1, userId2, null))
+        _messageServiceMock.Setup(x => x.GetConversationAsync(userId1, userId2, null, null, null))
             .ReturnsAsync(expectedMessages);
 
         // Act
@@ -337,7 +354,7 @@ public class MessagesControllerTests
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
         okResult!.Value.Should().BeEquivalentTo(expectedMessages);
-        _messageServiceMock.Verify(x => x.GetConversationAsync(userId1, userId2, null), Times.Once);
+        _messageServiceMock.Verify(x => x.GetConversationAsync(userId1, userId2, null, null, null), Times.Once);
     }
 
     /// <summary>
@@ -356,6 +373,10 @@ public class MessagesControllerTests
         var userId1 = 1;
         var userId2 = 2;
         var auctionId = 5;
+        
+        // Setup HttpContext with userId1 as current user (must be one of the participants)
+        SetupHttpContext(userId1);
+        
         var expectedMessages = new List<MessageResponseDto>
         {
             new MessageResponseDto
@@ -369,7 +390,7 @@ public class MessagesControllerTests
             }
         };
 
-        _messageServiceMock.Setup(x => x.GetConversationAsync(userId1, userId2, auctionId))
+        _messageServiceMock.Setup(x => x.GetConversationAsync(userId1, userId2, auctionId, null, null))
             .ReturnsAsync(expectedMessages);
 
         // Act
@@ -379,7 +400,7 @@ public class MessagesControllerTests
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
         okResult!.Value.Should().BeEquivalentTo(expectedMessages);
-        _messageServiceMock.Verify(x => x.GetConversationAsync(userId1, userId2, auctionId), Times.Once);
+        _messageServiceMock.Verify(x => x.GetConversationAsync(userId1, userId2, auctionId, null, null), Times.Once);
     }
 
     /// <summary>
