@@ -14,4 +14,8 @@ public interface IEmailService
     /// Gửi email với mật khẩu mới được tạo tự động (cho admin/support cấp lại mật khẩu).
     /// </summary>
     Task SendNewPasswordEmailAsync(string toEmail, string userName, string newPassword);
+    /// <summary>
+    /// Gửi email liên hệ từ người dùng đến admin.
+    /// </summary>
+    Task SendContactEmailAsync(string toEmail, string name, string email, string subject, string category, string message, int? userId = null);
 }

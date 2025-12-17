@@ -191,7 +191,7 @@ app.MapControllers();
 app.MapHub<BitNow_Backend.RealTime.AuctionHub>("/hubs/auction");
 app.MapHub<BitNow_Backend.RealTime.MessageHub>("/hubs/messages");
 
-// Seed admin from configuration
+// Seed admin from configuration and categories
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -232,6 +232,35 @@ using (var scope = app.Services.CreateScope())
                 await ctx.SaveChangesAsync();
             }
         }
+
+        // Seed categories
+        var categories = new[]
+        {
+            new { Name = "Điện tử", Slug = "dien-tu", Description = "Điện thoại, máy tính, thiết bị điện tử" },
+            new { Name = "Nghệ thuật", Slug = "nghe-thuat", Description = "Tranh vẽ, tác phẩm nghệ thuật, đồ trang trí" },
+            new { Name = "Sưu tầm", Slug = "suu-tam", Description = "Đồ cổ, tem, tiền xu, đồ sưu tầm" },
+            new { Name = "Trang sức", Slug = "trang-suc", Description = "Vòng tay, nhẫn, dây chuyền, đồ trang sức" },
+            new { Name = "Xe cộ", Slug = "xe-co", Description = "Ô tô, xe máy, xe đạp, phương tiện" },
+            new { Name = "Bất động sản", Slug = "bat-dong-san", Description = "Nhà đất, căn hộ, bất động sản" },
+            new { Name = "Nhạc cụ", Slug = "nhac-cu", Description = "Đàn, trống, kèn, nhạc cụ các loại" },
+            new { Name = "Nhiếp ảnh", Slug = "nhiep-anh", Description = "Máy ảnh, ống kính, thiết bị nhiếp ảnh" },
+        };
+
+        foreach (var cat in categories)
+        {
+            var existingCategory = await ctx.Categories.FirstOrDefaultAsync(c => c.Slug == cat.Slug);
+            if (existingCategory == null)
+            {
+                ctx.Categories.Add(new BitNow_Backend.DAL.Models.Category
+                {
+                    Name = cat.Name,
+                    Slug = cat.Slug,
+                    Description = cat.Description,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+        await ctx.SaveChangesAsync();
     }
     catch (Exception)
     {
