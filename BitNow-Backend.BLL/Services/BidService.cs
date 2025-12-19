@@ -365,6 +365,51 @@ namespace BitNow_Backend.BLL.Services
         {
             return await _bidRepository.GetDistinctBidderIdsByAuctionAsync(auctionId);
         }
+
+		/// <summary>
+		/// Đặt TTL (Time To Live) cho các Redis keys của auction sau khi auction kết thúc.
+		/// Sau khi TTL hết hạn, Redis sẽ tự động xóa các keys này để giải phóng bộ nhớ.
+		/// </summary>
+		/// <param name="auctionId">ID của auction đã kết thúc</param>
+		/// <param name="expirationMinutes">Số phút trước khi keys bị xóa (mặc định: 30 phút)</param>
+		public async Task SetAuctionCacheExpirationAsync(int auctionId, int expirationMinutes = 30)
+		{
+			if (_redis is null)
+			{
+				// Redis không sẵn sàng, không cần làm gì
+				return;
+			}
+
+			try
+			{
+				var db = _redis.GetDatabase();
+				var expiration = TimeSpan.FromMinutes(expirationMinutes);
+
+				// Set TTL cho cả hai keys: bids và highest
+				var bidsKey = BidsKey(auctionId);
+				var highestKey = HighestKey(auctionId);
+
+				// Kiểm tra xem keys có tồn tại không trước khi set TTL
+				var bidsExists = await db.KeyExistsAsync(bidsKey);
+				var highestExists = await db.KeyExistsAsync(highestKey);
+
+				if (bidsExists)
+				{
+					await db.KeyExpireAsync(bidsKey, expiration);
+				}
+
+				if (highestExists)
+				{
+					await db.KeyExpireAsync(highestKey, expiration);
+				}
+			}
+			catch (Exception ex)
+			{
+				// Log error nhưng không throw để không ảnh hưởng đến flow chính
+				// Redis error không nên block việc finalize auction
+				System.Diagnostics.Debug.WriteLine($"Error setting Redis TTL for auction {auctionId}: {ex.Message}");
+			}
+		}
     }
 }
 

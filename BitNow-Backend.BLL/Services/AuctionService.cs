@@ -19,6 +19,7 @@ namespace BitNow_Backend.BLL.Services
         private readonly IBidRepository _bidRepository;
         private readonly BidNowDbContext _dbContext;
         private readonly ILogger<AuctionService> _logger;
+        private readonly IBidService? _bidService;
         // Cho phép cả trạng thái tạm dừng (paused) và hủy (cancelled)
         private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase) 
         { 
@@ -35,13 +36,15 @@ namespace BitNow_Backend.BLL.Services
             IItemRepository itemRepository,
             IBidRepository bidRepository,
             BidNowDbContext dbContext,
-            ILogger<AuctionService> logger)
+            ILogger<AuctionService> logger,
+            IBidService? bidService = null)
         {
             _auctionRepository = auctionRepository;
             _itemRepository = itemRepository;
             _bidRepository = bidRepository;
             _dbContext = dbContext;
             _logger = logger;
+            _bidService = bidService;
         }
 
         public async Task<AuctionDetailDto?> GetDetailAsync(int id)
@@ -622,6 +625,22 @@ namespace BitNow_Backend.BLL.Services
             _dbContext.Entry(auction).State = EntityState.Detached;
             await _dbContext.SaveChangesAsync();
 
+            // Set TTL cho Redis cache keys sau khi auction kết thúc
+            if (_bidService != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _bidService.SetAuctionCacheExpirationAsync(auction.Id, expirationMinutes: 30);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to set Redis TTL for auction {AuctionId}", auction.Id);
+                    }
+                });
+            }
+
             return new AuctionCompletionResultDto
             {
                 AuctionId = auction.Id,
@@ -704,6 +723,22 @@ namespace BitNow_Backend.BLL.Services
                     // Save history record
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     _logger.LogInformation("Saved history record for auction {AuctionId} with WinnerId={WinnerId}", auction.Id, winnerId);
+
+                    // Set TTL cho Redis cache keys sau khi auction kết thúc
+                    if (_bidService != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _bidService.SetAuctionCacheExpirationAsync(auction.Id, expirationMinutes: 30);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to set Redis TTL for auction {AuctionId}", auction.Id);
+                            }
+                        });
+                    }
 
                     var completion = new AuctionCompletionResultDto
                     {

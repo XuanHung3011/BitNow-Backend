@@ -135,7 +135,17 @@ builder.Services.AddCors(options =>
 	options.AddPolicy("AllowAll", policy =>
 	{
 		// When using credentials, we must specify exact origins, not wildcard
-		policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
+		// IMPORTANT: Thêm domain Vercel của bạn vào đây (ví dụ: "https://your-app.vercel.app")
+		// Nếu có custom domain, thêm cả custom domain
+		policy.WithOrigins(
+			"http://localhost:3000", 
+			"https://localhost:3000",
+			"https://bitnow.io.vn",
+			"https://www.bitnow.io.vn"
+			// TODO: Thêm domain Vercel của bạn vào đây, ví dụ:
+			// "https://your-app.vercel.app",
+			// "https://your-custom-domain.com"
+		)
 			  .AllowAnyMethod()
 			  .AllowAnyHeader()
 			  .AllowCredentials(); // Required when frontend uses credentials: 'include'
@@ -148,11 +158,8 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
 	app.UseSwagger();
 	app.UseSwaggerUI();
-}
 
 // Use CORS early to handle preflight before any redirects
 app.UseCors("AllowAll");

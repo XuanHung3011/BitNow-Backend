@@ -134,17 +134,32 @@ public class AuthController : ControllerBase
     {
         try
         {
+            if (dto.UserId <= 0 || string.IsNullOrWhiteSpace(dto.Email))
+            {
+                return BadRequest(new { message = "UserId and Email are required" });
+            }
+
             var token = await _authService.GenerateAndStoreVerificationAsync(dto.UserId, dto.Email);
             
-            // Send email with the new token
-            await _authService.SendVerificationEmailAsync(dto.Email, dto.UserId, token);
+            // Send email with the new token (fire-and-forget to avoid blocking)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _authService.SendVerificationEmailAsync(dto.Email, dto.UserId, token);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send verification email to {Email}", dto.Email);
+                }
+            });
             
-            return Ok(new { token });
+            return Ok(new { token, message = "Verification email will be sent shortly" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Resend verification error");
-            return StatusCode(500, "Internal server error");
+            _logger.LogError(ex, "Resend verification error: {Message}, StackTrace: {StackTrace}", ex.Message, ex.StackTrace);
+            return StatusCode(500, new { message = $"Internal server error: {ex.Message}" });
         }
     }
 
