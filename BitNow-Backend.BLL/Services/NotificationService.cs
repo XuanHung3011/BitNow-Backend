@@ -50,7 +50,7 @@ namespace BitNow_Backend.BLL.Services
                 Type = dto.Type,
                 Message = dto.Message,
                 Link = dto.Link,
-                CreatedAt = DateTime.Now,
+                CreatedAt = DateTime.UtcNow, // CRITICAL: Use UTC để đảm bảo timezone consistency
                 IsRead = false
             };
 
@@ -106,7 +106,7 @@ namespace BitNow_Backend.BLL.Services
                 Message = notification.Message,
                 Link = notification.Link,
                 IsRead = notification.IsRead ?? false,
-                CreatedAt = notification.CreatedAt ?? DateTime.Now
+                CreatedAt = notification.CreatedAt ?? DateTime.UtcNow // Use UTC để đảm bảo timezone consistency
             };
         }
     }

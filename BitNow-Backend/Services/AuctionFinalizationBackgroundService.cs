@@ -29,6 +29,8 @@ namespace BitNow_Backend.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _logger.LogInformation("🚀 AuctionFinalizationBackgroundService started");
+            
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -39,6 +41,8 @@ namespace BitNow_Backend.Services
 
                     if (completions.Count > 0)
                     {
+                        _logger.LogInformation("✅ Finalized {Count} expired auctions", completions.Count);
+                        
                         foreach (var completion in completions)
                         {
                             var payload = new
@@ -50,6 +54,9 @@ namespace BitNow_Backend.Services
                                 completionType = completion.CompletionType,
                                 timestamp = completion.CompletedAt
                             };
+
+                            _logger.LogInformation("📢 Broadcasting AuctionStatusUpdated for auction {AuctionId}, winnerId={WinnerId}", 
+                                completion.AuctionId, completion.WinnerId);
 
                             await _hubContext.Clients.Group($"auction-{completion.AuctionId}")
                                 .SendAsync("AuctionStatusUpdated", payload, stoppingToken);
@@ -64,11 +71,12 @@ namespace BitNow_Backend.Services
                 }
                 catch (OperationCanceledException)
                 {
+                    _logger.LogInformation("🛑 AuctionFinalizationBackgroundService is stopping");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Lỗi khi tự động cập nhật trạng thái phiên đấu giá hết hạn");
+                    _logger.LogError(ex, "❌ Lỗi khi tự động cập nhật trạng thái phiên đấu giá hết hạn: {Message}", ex.Message);
                 }
 
                 try
@@ -80,7 +88,10 @@ namespace BitNow_Backend.Services
                     break;
                 }
             }
+            
+            _logger.LogInformation("🛑 AuctionFinalizationBackgroundService stopped");
         }
     }
 }
+
 

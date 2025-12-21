@@ -258,13 +258,28 @@ namespace BitNow_Backend.DAL.Repositories
         {
             var now = DateTime.Now;
 
-            // Get auctions where user is the winner
+            // CRITICAL: Get auctions where user is the winner
+            // Có 2 cách để xác định winner (theo thứ tự ưu tiên):
+            // 1. WinnerId trong Auction == bidderId (đã được set khi finalize) - ƯU TIÊN CAO NHẤT
+            // 2. WinnerId trong AuctionHistory == bidderId (fallback nếu WinnerId trong Auction chưa được set)
+            
+            // Lấy auction IDs từ AuctionHistory (nếu WinnerId trong Auction chưa được set)
+            var historyWinnerIds = await _context.AuctionHistories
+                .Where(h => h.WinnerId == bidderId)
+                .Select(h => h.AuctionId)
+                .ToListAsync();
+
             var query = _context.Auctions
                 .Include(a => a.Item)
                     .ThenInclude(i => i.Category)
                 .Include(a => a.Seller)
                 .Include(a => a.Bids.Where(b => b.BidderId == bidderId))
-                .Where(a => a.WinnerId == bidderId) // User is the winner
+                .Where(a => 
+                    // Cách 1: WinnerId trong Auction đã được set và match với bidderId
+                    (a.WinnerId.HasValue && a.WinnerId.Value == bidderId) ||
+                    // Cách 2: WinnerId trong AuctionHistory match với bidderId (fallback)
+                    historyWinnerIds.Contains(a.Id)
+                )
                 .Where(a => a.Status == "completed" || a.EndTime < now) // Auction has ended
                 .OrderByDescending(a => a.EndTime); // Most recent first
 

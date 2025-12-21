@@ -40,3 +40,5 @@ public partial class Dispute
     public virtual User? Resolver { get; set; }
 }
 
+
+

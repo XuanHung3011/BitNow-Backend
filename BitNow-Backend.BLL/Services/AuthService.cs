@@ -239,6 +239,15 @@ public class AuthService : IAuthService
     }
 
     /// <summary>
+    /// Lấy thông tin user theo Id.
+    /// </summary>
+    public async Task<UserResponseDto?> GetUserByIdAsync(int userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        return user != null ? Map(user) : null;
+    }
+
+    /// <summary>
     /// Ánh xạ entity User sang UserResponseDto cho phía client.
     /// </summary>
     private static UserResponseDto Map(User user)

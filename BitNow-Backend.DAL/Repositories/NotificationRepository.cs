@@ -48,7 +48,9 @@ namespace BitNow_Backend.DAL.Repositories
 
         public async Task<Notification> AddAsync(Notification notification)
         {
-            notification.CreatedAt = DateTime.Now;
+            // CRITICAL: Use UTC time để đảm bảo timezone consistency
+            // Database default là sysutcdatetime() nhưng nếu set thủ công thì dùng UTC
+            notification.CreatedAt = DateTime.UtcNow;
             notification.IsRead = false;
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();

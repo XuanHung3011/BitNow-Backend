@@ -32,5 +32,9 @@ public interface IAuthService
     /// Đặt lại mật khẩu từ token.
     /// </summary>
     Task<bool> ResetPasswordAsync(string token, string newPassword);
+    /// <summary>
+    /// Lấy thông tin user theo Id.
+    /// </summary>
+    Task<UserResponseDto?> GetUserByIdAsync(int userId);
 }
 

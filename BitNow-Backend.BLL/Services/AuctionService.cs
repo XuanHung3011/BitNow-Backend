@@ -620,7 +620,7 @@ namespace BitNow_Backend.BLL.Services
             auction.CurrentBid = auction.BuyNowPrice;
             auction.EndTime = completedAt;
 
-            await AddHistoryRecordIfMissingAsync(auction, auction.BuyNowPrice, completedAt, buyerId);
+            await AddHistoryRecordIfMissingAsync(auction, auction.BuyNowPrice, completedAt);
 
             _dbContext.Entry(auction).State = EntityState.Detached;
             await _dbContext.SaveChangesAsync();
@@ -673,72 +673,17 @@ namespace BitNow_Backend.BLL.Services
                 {
                     var (winnerId, finalBid) = await ResolveWinnerFromBidsAsync(auction.Id, cancellationToken);
 
-                    _logger.LogInformation("Finalizing auction {AuctionId}: winnerId={WinnerId}, finalBid={FinalBid}", 
-                        auction.Id, winnerId, finalBid);
-
-                    // Update auction status and winner
+                    // Update auction status and winner - giống BuyNowAsync
                     auction.Status = "completed";
                     auction.WinnerId = winnerId;
                     if (finalBid.HasValue)
                     {
                         auction.CurrentBid = finalBid.Value;
                     }
+                    auction.EndTime = now; // Update EndTime giống BuyNowAsync
 
-                    // Save auction changes first to ensure WinnerId is persisted
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                    _logger.LogInformation("Saved auction {AuctionId} with WinnerId={WinnerId}", auction.Id, winnerId);
-
-                    // Reload auction to ensure WinnerId is available
-                    await _dbContext.Entry(auction).ReloadAsync(cancellationToken);
-                    _logger.LogInformation("Reloaded auction {AuctionId}, WinnerId={WinnerId}", auction.Id, auction.WinnerId);
-
-                    // Create Order for winner if there is a winner
-                    if (winnerId.HasValue && finalBid.HasValue)
-                    {
-                        // Check if order already exists
-                        var existingOrder = await _dbContext.Orders
-                            .FirstOrDefaultAsync(o => o.AuctionId == auction.Id, cancellationToken);
-
-                        if (existingOrder == null)
-                        {
-                            var order = new Order
-                            {
-                                AuctionId = auction.Id,
-                                BuyerId = winnerId.Value,
-                                SellerId = auction.SellerId,
-                                FinalPrice = finalBid.Value,
-                                OrderStatus = "awaiting_payment", // Winner needs to pay
-                                CreatedAt = now
-                            };
-
-                            _dbContext.Orders.Add(order);
-                            // Save immediately to ensure order is available
-                            await _dbContext.SaveChangesAsync(cancellationToken);
-                            _logger.LogInformation("Created order for auction {AuctionId}, buyer {BuyerId}", auction.Id, winnerId.Value);
-                        }
-                    }
-
-                    // Add history record - use winnerId directly instead of auction.WinnerId to ensure it's correct
-                    await AddHistoryRecordIfMissingAsync(auction, finalBid, now, winnerId, cancellationToken);
-                    // Save history record
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                    _logger.LogInformation("Saved history record for auction {AuctionId} with WinnerId={WinnerId}", auction.Id, winnerId);
-
-                    // Set TTL cho Redis cache keys sau khi auction kết thúc
-                    if (_bidService != null)
-                    {
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                await _bidService.SetAuctionCacheExpirationAsync(auction.Id, expirationMinutes: 30);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning(ex, "Failed to set Redis TTL for auction {AuctionId}", auction.Id);
-                            }
-                        });
-                    }
+                    // Add history record - giống BuyNowAsync (trước khi save)
+                    await AddHistoryRecordIfMissingAsync(auction, finalBid, now, cancellationToken);
 
                     var completion = new AuctionCompletionResultDto
                     {
@@ -755,7 +700,29 @@ namespace BitNow_Backend.BLL.Services
                 catch (Exception ex)
                 {
                     // Log error but continue processing other auctions
-                    _logger.LogError(ex, "Error finalizing auction {AuctionId}", auction.Id);
+                    _logger?.LogError(ex, "Error finalizing auction {AuctionId}", auction.Id);
+                }
+            }
+
+            // Save all changes at once - giống BuyNowAsync
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Set TTL cho Redis cache keys sau khi auction kết thúc - giống BuyNowAsync
+            if (_bidService != null)
+            {
+                foreach (var auction in expiredAuctions)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _bidService.SetAuctionCacheExpirationAsync(auction.Id, expirationMinutes: 30);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Failed to set Redis TTL for auction {AuctionId}", auction.Id);
+                        }
+                    });
                 }
             }
 
@@ -767,45 +734,23 @@ namespace BitNow_Backend.BLL.Services
             var highestBid = await _bidRepository.GetHighestBidByAuctionAsync(auctionId, cancellationToken);
             if (highestBid == null)
             {
-                _logger.LogWarning("No highest bid found for auction {AuctionId}", auctionId);
-                
-                // Fallback: Check if auction has CurrentBid set (might have bids but not in DB yet)
-                var auction = await _dbContext.Auctions
-                    .FirstOrDefaultAsync(a => a.Id == auctionId, cancellationToken);
-                
-                if (auction != null && auction.CurrentBid > 0 && auction.BidCount > 0)
-                {
-                    _logger.LogWarning("Auction {AuctionId} has CurrentBid={CurrentBid} and BidCount={BidCount} but no bids in database. This might indicate a sync issue.", 
-                        auctionId, auction.CurrentBid, auction.BidCount);
-                }
-                
                 return (null, null);
             }
-
-            _logger.LogInformation("Resolved winner for auction {AuctionId}: BidderId={BidderId}, Amount={Amount}", 
-                auctionId, highestBid.BidderId, highestBid.Amount);
 
             return (highestBid.BidderId, highestBid.Amount);
         }
 
-        private async Task AddHistoryRecordIfMissingAsync(Auction auction, decimal? finalBid, DateTime completedAt, int? winnerId = null, CancellationToken cancellationToken = default)
+        private async Task AddHistoryRecordIfMissingAsync(Auction auction, decimal? finalBid, DateTime completedAt, CancellationToken cancellationToken = default)
         {
             var exists = await _dbContext.AuctionHistories
                 .AnyAsync(h => h.AuctionId == auction.Id, cancellationToken);
 
             if (exists)
             {
-                _logger.LogInformation("History record already exists for auction {AuctionId}", auction.Id);
                 return;
             }
 
             var item = auction.Item ?? await _itemRepository.GetByIdAsync(auction.ItemId);
-
-            // Use winnerId parameter if provided, otherwise fall back to auction.WinnerId
-            var historyWinnerId = winnerId ?? auction.WinnerId;
-
-            _logger.LogInformation("Creating history record for auction {AuctionId} with WinnerId={WinnerId} (from param={ParamWinnerId}, from auction={AuctionWinnerId})", 
-                auction.Id, historyWinnerId, winnerId, auction.WinnerId);
 
             var history = new AuctionHistory
             {
@@ -814,7 +759,7 @@ namespace BitNow_Backend.BLL.Services
                 Title = item?.Title ?? $"Auction #{auction.Id}",
                 CategoryId = item?.CategoryId ?? 0,
                 SellerId = auction.SellerId,
-                WinnerId = historyWinnerId, // Use the provided winnerId or auction.WinnerId
+                WinnerId = auction.WinnerId,
                 StartingBid = auction.StartingBid,
                 FinalBid = finalBid,
                 TotalBids = auction.BidCount ?? 0,
@@ -824,7 +769,6 @@ namespace BitNow_Backend.BLL.Services
             };
 
             _dbContext.AuctionHistories.Add(history);
-            _logger.LogInformation("Added history record to context for auction {AuctionId}", auction.Id);
         }
     }
 }

@@ -139,6 +139,24 @@ public class AuthController : ControllerBase
                 return BadRequest(new { message = "UserId and Email are required" });
             }
 
+            // Validate user exists and email matches
+            var user = await _authService.GetUserByIdAsync(dto.UserId);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            if (!string.Equals(user.Email, dto.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Email does not match the user account" });
+            }
+
+            // Check if user is already verified
+            if (user.IsActive == true)
+            {
+                return BadRequest(new { message = "Email is already verified" });
+            }
+
             var token = await _authService.GenerateAndStoreVerificationAsync(dto.UserId, dto.Email);
             
             // Send email with the new token (fire-and-forget to avoid blocking)
@@ -147,14 +165,15 @@ public class AuthController : ControllerBase
                 try
                 {
                     await _authService.SendVerificationEmailAsync(dto.Email, dto.UserId, token);
+                    _logger.LogInformation("Verification email sent successfully to {Email} for UserId {UserId}", dto.Email, dto.UserId);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to send verification email to {Email}", dto.Email);
+                    _logger.LogError(ex, "Failed to send verification email to {Email} for UserId {UserId}", dto.Email, dto.UserId);
                 }
             });
             
-            return Ok(new { token, message = "Verification email will be sent shortly" });
+            return Ok(new { message = "Verification email will be sent shortly" });
         }
         catch (Exception ex)
         {
