@@ -283,6 +283,11 @@ namespace BitNow_Backend.BLL.Services
                             .OrderByDescending(b => b.Amount)
                             .ThenByDescending(b => b.BidTime)
                             .FirstOrDefault(),
+                        // Lấy bid cao nhất của TẤT CẢ bidders trong auction (để xác định winner nếu WinnerId chưa set)
+                        HighestBidInAuction = a.Bids
+                            .OrderByDescending(b => b.Amount)
+                            .ThenByDescending(b => b.BidTime)
+                            .FirstOrDefault(),
                         AuctionId = a.Id,
                         AuctionStatus = a.Status,
                         AuctionWinnerId = a.WinnerId,
@@ -312,11 +317,23 @@ namespace BitNow_Backend.BLL.Services
                     string status;
                     if (string.Equals(item.AuctionStatus, "completed", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Kiểm tra cả winner_id VÀ amount
-                        status = item.AuctionWinnerId == bidderId
-                                 && item.HighestBid.Amount == item.AuctionCurrentBid
-                            ? "won"
-                            : "lost";
+                        // CRITICAL: Ưu tiên kiểm tra WinnerId trước (nếu đã được set)
+                        if (item.AuctionWinnerId.HasValue)
+                        {
+                            // Nếu WinnerId đã được set, chỉ cần kiểm tra xem có match với bidderId không
+                            status = item.AuctionWinnerId.Value == bidderId ? "won" : "lost";
+                        }
+                        else if (item.HighestBidInAuction != null)
+                        {
+                            // Fallback: Nếu WinnerId chưa được set, kiểm tra xem user có phải là người đặt giá cao nhất không
+                            // Sử dụng HighestBidInAuction đã được load trong query
+                            status = item.HighestBidInAuction.BidderId == bidderId ? "won" : "lost";
+                        }
+                        else
+                        {
+                            // Không có bids nào, không ai thắng
+                            status = "lost";
+                        }
                     }
                     else if (string.Equals(item.AuctionStatus, "active", StringComparison.OrdinalIgnoreCase))
                     {
@@ -365,6 +382,51 @@ namespace BitNow_Backend.BLL.Services
         {
             return await _bidRepository.GetDistinctBidderIdsByAuctionAsync(auctionId);
         }
+
+		/// <summary>
+		/// Đặt TTL (Time To Live) cho các Redis keys của auction sau khi auction kết thúc.
+		/// Sau khi TTL hết hạn, Redis sẽ tự động xóa các keys này để giải phóng bộ nhớ.
+		/// </summary>
+		/// <param name="auctionId">ID của auction đã kết thúc</param>
+		/// <param name="expirationMinutes">Số phút trước khi keys bị xóa (mặc định: 30 phút)</param>
+		public async Task SetAuctionCacheExpirationAsync(int auctionId, int expirationMinutes = 30)
+		{
+			if (_redis is null)
+			{
+				// Redis không sẵn sàng, không cần làm gì
+				return;
+			}
+
+			try
+			{
+				var db = _redis.GetDatabase();
+				var expiration = TimeSpan.FromMinutes(expirationMinutes);
+
+				// Set TTL cho cả hai keys: bids và highest
+				var bidsKey = BidsKey(auctionId);
+				var highestKey = HighestKey(auctionId);
+
+				// Kiểm tra xem keys có tồn tại không trước khi set TTL
+				var bidsExists = await db.KeyExistsAsync(bidsKey);
+				var highestExists = await db.KeyExistsAsync(highestKey);
+
+				if (bidsExists)
+				{
+					await db.KeyExpireAsync(bidsKey, expiration);
+				}
+
+				if (highestExists)
+				{
+					await db.KeyExpireAsync(highestKey, expiration);
+				}
+			}
+			catch (Exception ex)
+			{
+				// Log error nhưng không throw để không ảnh hưởng đến flow chính
+				// Redis error không nên block việc finalize auction
+				System.Diagnostics.Debug.WriteLine($"Error setting Redis TTL for auction {auctionId}: {ex.Message}");
+			}
+		}
     }
 }
 

@@ -34,3 +34,5 @@ public partial class Payment
     public virtual Order Order { get; set; } = null!;
 }
 
+
+

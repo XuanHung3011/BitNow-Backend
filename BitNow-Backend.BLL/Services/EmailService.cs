@@ -30,13 +30,14 @@ public class EmailService : IEmailService
             var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
             var username = _configuration["Email:Username"] ?? throw new InvalidOperationException("Email:Username not configured");
             var password = _configuration["Email:Password"] ?? throw new InvalidOperationException("Email:Password not configured");
+            var baseUrl = _configuration["Email:BaseUrl"] ?? "https://bitnow.io.vn";
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(fromName, fromEmail));
             message.To.Add(new MailboxAddress(userName, toEmail));
             message.Subject = "Xác minh tài khoản BidNow";
 
-            var verificationUrl = $"http://localhost:3000/verify?token={verificationToken}";
+            var verificationUrl = $"{baseUrl}/verify?token={verificationToken}";
             
             var bodyBuilder = new BodyBuilder
             {
@@ -108,13 +109,14 @@ public class EmailService : IEmailService
             var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
             var username = _configuration["Email:Username"] ?? throw new InvalidOperationException("Email:Username not configured");
             var password = _configuration["Email:Password"] ?? throw new InvalidOperationException("Email:Password not configured");
+            var baseUrl = _configuration["Email:BaseUrl"] ?? "https://bitnow.io.vn";
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(fromName, fromEmail));
             message.To.Add(new MailboxAddress(userName, toEmail));
             message.Subject = "Đặt lại mật khẩu BidNow";
 
-            var resetUrl = $"http://localhost:3000/reset-password?token={resetToken}";
+            var resetUrl = $"{baseUrl}/reset-password?token={resetToken}";
 
             var bodyBuilder = new BodyBuilder
             {

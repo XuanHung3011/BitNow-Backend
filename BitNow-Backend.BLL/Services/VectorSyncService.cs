@@ -44,21 +44,27 @@ namespace BitNow_Backend.BLL.Services
 
             try
             {
-                var lmStudioUrl = _configuration["LMStudio:BaseUrl"] ?? "http://localhost:1234";
+                var baseUrl = _configuration["LMStudio:BaseUrl"] ?? "http://localhost:1234";
                 var model = _configuration["LMStudio:Model"] ?? "nomic-embed-text-v2-moe";
+                
+                // Detect Ollama vs LMStudio based on port or URL
+                var isOllama = baseUrl.Contains("11434") || baseUrl.Contains("ollama");
+                var endpoint = isOllama ? "/api/embeddings" : "/v1/embeddings";
+                var inputField = isOllama ? "prompt" : "input";
 
                 var client = _httpClientFactory.CreateClient("LMStudio");
-                client.BaseAddress = new Uri(lmStudioUrl);
+                client.BaseAddress = new Uri(baseUrl);
                 client.Timeout = TimeSpan.FromSeconds(30);
 
-                var payload = new
+                // Ollama uses "prompt", LMStudio uses "input"
+                var payload = new Dictionary<string, object>
                 {
-                    model = model,
-                    input = text
+                    ["model"] = model
                 };
+                payload[inputField] = text;
 
                 var json = JsonSerializer.Serialize(payload);
-                using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/embeddings")
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
                 {
                     Content = new StringContent(json, Encoding.UTF8, "application/json")
                 };
@@ -68,29 +74,44 @@ namespace BitNow_Backend.BLL.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorText = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogError("LM Studio API returned non-success status {Status}: {Body}",
-                        response.StatusCode, errorText);
-                    throw new InvalidOperationException($"LM Studio API error: {response.StatusCode} - {errorText}");
+                    _logger.LogError("Embedding API ({Service}) returned non-success status {Status}: {Body}",
+                        isOllama ? "Ollama" : "LMStudio", response.StatusCode, errorText);
+                    throw new InvalidOperationException($"Embedding API error: {response.StatusCode} - {errorText}");
                 }
 
                 using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
                 using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
 
                 var root = document.RootElement;
-                var data = root.GetProperty("data");
-
-                if (data.GetArrayLength() == 0)
+                
+                // Ollama returns embedding directly, LMStudio wraps in "data" array
+                JsonElement embeddingElement;
+                if (root.TryGetProperty("data", out var data))
                 {
-                    throw new InvalidOperationException("LM Studio returned empty embedding data");
+                    // LMStudio format
+                    if (data.GetArrayLength() == 0)
+                    {
+                        throw new InvalidOperationException("Embedding API returned empty embedding data");
+                    }
+                    embeddingElement = data[0].GetProperty("embedding");
+                }
+                else if (root.TryGetProperty("embedding", out embeddingElement))
+                {
+                    // Ollama format - direct embedding
+                }
+                else
+                {
+                    throw new InvalidOperationException("Invalid embedding API response format");
                 }
 
-                var embedding = data[0].GetProperty("embedding");
                 var embeddingArray = new List<float>();
-
-                foreach (var element in embedding.EnumerateArray())
+                foreach (var element in embeddingElement.EnumerateArray())
                 {
                     embeddingArray.Add((float)element.GetDouble());
                 }
+
+                _logger.LogInformation("Generated embedding with {Dimensions} dimensions using {Service}",
+                    embeddingArray.Count, isOllama ? "Ollama" : "LMStudio");
 
                 return embeddingArray.ToArray();
             }

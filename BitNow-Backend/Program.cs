@@ -15,13 +15,15 @@ using BitNow_Backend.BLL.BackgroundServices;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-// DAL: EF DbContext registration
+
+#region DATABASE
 builder.Services.AddDbContext<BidNowDbContext>(options =>
 {
-	options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn"));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn"));
 });
+#endregion
 
-// BLL: Register services
+#region SERVICES
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -40,158 +42,141 @@ builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<IAuctionChatService, AuctionChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
-// Dispute
-builder.Services.AddScoped<BitNow_Backend.DAL.IRepositories.IDisputeRepository, BitNow_Backend.DAL.Repositories.DisputeRepository>();
-builder.Services.AddScoped<IDisputeService, BitNow_Backend.BLL.Services.DisputeService>();
-
+builder.Services.AddScoped<IDisputeService, DisputeService>();
+builder.Services.AddScoped<BitNow_Backend.DAL.IRepositories.IDisputeRepository, DisputeRepository>();
 builder.Services.AddScoped<IFavoriteSellerRepository, FavoriteSellerRepository>();
 builder.Services.AddScoped<IFavoriteSellerService, FavoriteSellerService>();
-// Search keywords
 builder.Services.AddScoped<ISearchKeywordRepository, SearchKeywordRepository>();
 builder.Services.AddScoped<ISearchKeywordService, SearchKeywordService>();
-// User auction views
 builder.Services.AddScoped<IUserAuctionViewRepository, UserAuctionViewRepository>();
 builder.Services.AddScoped<IUserAuctionViewService, UserAuctionViewService>();
-
-// Ratings
 builder.Services.AddScoped<IRatingRepository, RatingRepository>();
 builder.Services.AddScoped<IRatingService, RatingService>();
-
-// File Upload Service
-builder.Services.AddScoped<BitNow_Backend.Services.IFileUploadService, BitNow_Backend.Services.FileUploadService>();
-// Bids
+builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IBidService, BidService>();
-// Auto Bids
 builder.Services.AddScoped<IAutoBidRepository, AutoBidRepository>();
 builder.Services.AddScoped<IAutoBidService, AutoBidService>();
-// Bid Notification
-builder.Services.AddScoped<BitNow_Backend.BLL.IServices.IBidNotificationService, BitNow_Backend.Services.BidNotificationService>();
-// Notification Hub Service
+builder.Services.AddScoped<IBidNotificationService, BidNotificationService>();
 builder.Services.AddScoped<INotificationHub, NotificationHubService>();
-    // Admin Stats
-    builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
-    // Seller Stats
-    builder.Services.AddScoped<ISellerStatsService, SellerStatsService>();
-// Platform Analytics
+builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
+builder.Services.AddScoped<ISellerStatsService, SellerStatsService>();
 builder.Services.AddScoped<IPlatformAnalyticsService, PlatformAnalyticsService>();
+#endregion
 
-
-// Register Background Service
+#region BACKGROUND
 builder.Services.AddHostedService<CleanupBackgroundService>();
-
 builder.Services.AddHostedService<AuctionFinalizationBackgroundService>();
+builder.Services.AddHostedService<AuctionStatusUpdateService>();
+#endregion
 
-
-
-// AI Recommendations - Vector-based
+#region AI
 Console.OutputEncoding = Encoding.UTF8;
-
 builder.Services.AddScoped<IPineconeService, PineconeService>();
 builder.Services.AddScoped<IVectorSyncService, VectorSyncService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
-
-// HttpClient for LM Studio (local embedding service)
 builder.Services.AddHttpClient("LMStudio");
-
-// HttpClient for Pinecone
 builder.Services.AddHttpClient("Pinecone");
+#endregion
 
-// Payment Services
+#region PAYMENT
 builder.Services.AddScoped<IPayOsService, PayOsService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+#endregion
 
-// Background Service for Auction Status Updates
-builder.Services.AddHostedService<AuctionStatusUpdateService>();
-
-
-// Add services to the container.
-builder.Services.AddControllers();
-
-// SignalR
-builder.Services.AddSignalR();
-
-// Redis (cache + pub/sub if needed)
+#region REDIS
 var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"];
 if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
-	try
-	{
-		var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
-		options.AbortOnConnectFail = false; // allow startup even if redis not ready
-		var mux = ConnectionMultiplexer.Connect(options);
-		builder.Services.AddSingleton<IConnectionMultiplexer>(mux);
-		builder.Services.AddStackExchangeRedisCache(cfg => { cfg.Configuration = redisConnectionString; });
-	}
-	catch
-	{
-		// If Redis is unavailable, continue without registering it
-	}
+    try
+    {
+        var redisOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+        redisOptions.AbortOnConnectFail = false;
+        var mux = ConnectionMultiplexer.Connect(redisOptions);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(mux);
+        builder.Services.AddStackExchangeRedisCache(cfg =>
+        {
+            cfg.Configuration = redisConnectionString;
+        });
+    }
+    catch { }
 }
+#endregion
 
-// Add CORS
+#region CONTROLLERS + SIGNALR + CORS
+builder.Services.AddControllers();
+
+builder.Services.AddSignalR(options =>
+{
+    // KeepAliveInterval: Server gửi ping mỗi 15s để giữ connection
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    // ClientTimeoutInterval: Client phải respond trong 500s, nếu không sẽ disconnect
+    // Với long polling, client sẽ tự reconnect trước khi timeout
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(500);
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    // Note: Long polling timeout được xử lý ở client-side (trong auctionHub.ts)
+    // Server không có cấu hình riêng cho long polling timeout
+});
+
 builder.Services.AddCors(options =>
 {
-	options.AddPolicy("AllowAll", policy =>
-	{
-		// When using credentials, we must specify exact origins, not wildcard
-		policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
-			  .AllowAnyMethod()
-			  .AllowAnyHeader()
-			  .AllowCredentials(); // Required when frontend uses credentials: 'include'
-	});
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:3000",
+                "https://localhost:3000",
+                "https://bitnow.io.vn",
+                "https://www.bitnow.io.vn"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
 });
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+#endregion
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-	app.UseSwagger();
-	app.UseSwaggerUI();
-}
+#region PIPELINE (QUAN TRỌNG)
+app.UseSwagger();
+app.UseSwaggerUI();
 
-// Use CORS early to handle preflight before any redirects
-app.UseCors("AllowAll");
+app.UseRouting();                 // ⚠️ BẮT BUỘC
+app.UseCors("AllowFrontend");     // ⚠️ BẮT BUỘC – SAU UseRouting
 
-
-// Avoid redirecting preflight requests in development (causes CORS failure)
 if (!app.Environment.IsDevelopment())
 {
-	app.UseHttpsRedirection();
+    app.UseHttpsRedirection();
 }
 
 app.UseAuthorization();
 
- 
-
-// Serve static files from wwwroot folder (nơi lưu ảnh)
 var wwwrootPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
-
-// Đảm bảo thư mục wwwroot tồn tại
 if (!Directory.Exists(wwwrootPath))
 {
     Directory.CreateDirectory(wwwrootPath);
 }
 
-// Configure static file serving from wwwroot
-// Ảnh được lưu trong wwwroot/uploads, truy cập qua /images/uploads/filename
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(wwwrootPath),
+    FileProvider = new PhysicalFileProvider(wwwrootPath),
     RequestPath = "/images"
 });
 
-
 app.MapControllers();
-// SignalR hubs
-app.MapHub<BitNow_Backend.RealTime.AuctionHub>("/hubs/auction");
-app.MapHub<BitNow_Backend.RealTime.MessageHub>("/hubs/messages");
 
-// Seed admin from configuration and categories
+// Map SignalR hubs - CORS sẽ tự động được áp dụng từ middleware
+app.MapHub<AuctionHub>("/hubs/auction")
+    .RequireCors("AllowFrontend");
+app.MapHub<MessageHub>("/hubs/messages")
+    .RequireCors("AllowFrontend");
+#endregion
+
+#region SEED DATA
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -199,13 +184,16 @@ using (var scope = app.Services.CreateScope())
     {
         var ctx = services.GetRequiredService<BidNowDbContext>();
         var config = services.GetRequiredService<IConfiguration>();
+
         var email = config["Admin:Email"];
         var password = config["Admin:Password"];
         var fullName = config["Admin:FullName"] ?? "Administrator";
 
         if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
         {
-            var existing = await ctx.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.Email == email);
+            var existing = await ctx.Users.Include(u => u.UserRoles)
+                .FirstOrDefaultAsync(u => u.Email == email);
+
             if (existing == null)
             {
                 var admin = new BitNow_Backend.DAL.Models.User
@@ -214,58 +202,23 @@ using (var scope = app.Services.CreateScope())
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
                     FullName = fullName,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    ReputationScore = 0.00m,
-                    TotalRatings = 0,
-                    TotalSales = 0,
-                    TotalPurchases = 0
+                    CreatedAt = DateTime.UtcNow
                 };
                 ctx.Users.Add(admin);
                 await ctx.SaveChangesAsync();
 
-                ctx.UserRoles.Add(new BitNow_Backend.DAL.Models.UserRole { UserId = admin.Id, Role = "admin", CreatedAt = DateTime.UtcNow });
-                await ctx.SaveChangesAsync();
-            }
-            else if (!existing.UserRoles.Any(r => r.Role == "admin"))
-            {
-                ctx.UserRoles.Add(new BitNow_Backend.DAL.Models.UserRole { UserId = existing.Id, Role = "admin", CreatedAt = DateTime.UtcNow });
-                await ctx.SaveChangesAsync();
-            }
-        }
-
-        // Seed categories
-        var categories = new[]
-        {
-            new { Name = "Điện tử", Slug = "dien-tu", Description = "Điện thoại, máy tính, thiết bị điện tử" },
-            new { Name = "Nghệ thuật", Slug = "nghe-thuat", Description = "Tranh vẽ, tác phẩm nghệ thuật, đồ trang trí" },
-            new { Name = "Sưu tầm", Slug = "suu-tam", Description = "Đồ cổ, tem, tiền xu, đồ sưu tầm" },
-            new { Name = "Trang sức", Slug = "trang-suc", Description = "Vòng tay, nhẫn, dây chuyền, đồ trang sức" },
-            new { Name = "Xe cộ", Slug = "xe-co", Description = "Ô tô, xe máy, xe đạp, phương tiện" },
-            new { Name = "Bất động sản", Slug = "bat-dong-san", Description = "Nhà đất, căn hộ, bất động sản" },
-            new { Name = "Nhạc cụ", Slug = "nhac-cu", Description = "Đàn, trống, kèn, nhạc cụ các loại" },
-            new { Name = "Nhiếp ảnh", Slug = "nhiep-anh", Description = "Máy ảnh, ống kính, thiết bị nhiếp ảnh" },
-        };
-
-        foreach (var cat in categories)
-        {
-            var existingCategory = await ctx.Categories.FirstOrDefaultAsync(c => c.Slug == cat.Slug);
-            if (existingCategory == null)
-            {
-                ctx.Categories.Add(new BitNow_Backend.DAL.Models.Category
+                ctx.UserRoles.Add(new BitNow_Backend.DAL.Models.UserRole
                 {
-                    Name = cat.Name,
-                    Slug = cat.Slug,
-                    Description = cat.Description,
+                    UserId = admin.Id,
+                    Role = "admin",
                     CreatedAt = DateTime.UtcNow
                 });
+                await ctx.SaveChangesAsync();
             }
         }
-        await ctx.SaveChangesAsync();
     }
-    catch (Exception)
-    {
-        // swallow seeding errors to not block app startup
-    }
+    catch { }
 }
+#endregion
 
 app.Run();
